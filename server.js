@@ -18,7 +18,8 @@ app.get('/', (req, res) => {
     message: 'Welcome to Backend API',
     status: 'running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    hasDatabaseUrl: !!process.env.DATABASE_URL
   });
 });
 
@@ -26,7 +27,8 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    database: process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED - Please add DATABASE_URL to Vercel'
   });
 });
 
