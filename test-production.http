@@ -1,0 +1,31 @@
+### Test Production API (Vercel)
+
+### Check production server status
+GET https://backend-node-lilac-seven.vercel.app/
+
+### Register a new user (Production)
+POST https://backend-node-lilac-seven.vercel.app/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "produser",
+  "email": "prod@example.com",
+  "password": "123456",
+  "fullName": "Production User"
+}
+
+### Login (Production)
+POST https://backend-node-lilac-seven.vercel.app/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prod@example.com",
+  "password": "123456"
+}
+
+### Get all users (Production)
+GET https://backend-node-lilac-seven.vercel.app/api/auth/users
+
+### Get current user (Production - need token)
+GET https://backend-node-lilac-seven.vercel.app/api/auth/me
+Authorization: Bearer YOUR_TOKEN_HERE

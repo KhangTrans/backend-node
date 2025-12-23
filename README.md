@@ -50,6 +50,31 @@ npm start
 
 Server sẽ chạy tại: `http://localhost:5000`
 
+## 🌐 Deployment
+
+**Production URL:** https://backend-node-lilac-seven.vercel.app/
+
+Dự án đã được deploy lên **Vercel**. 
+
+### Deploy lại khi có thay đổi:
+```bash
+git add .
+git commit -m "Your commit message"
+git push origin master
+```
+
+Vercel sẽ tự động deploy khi có commit mới trên branch master.
+
+### Environment Variables trên Vercel:
+Cần thêm các biến môi trường sau trong Vercel Dashboard:
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `JWT_SECRET`
+- `JWT_EXPIRE`
+
 ## API Endpoints
 
 ### Authentication
