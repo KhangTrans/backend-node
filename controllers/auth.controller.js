@@ -92,7 +92,13 @@ exports.login = async (req, res) => {
       return res.status(400).json({ 
         success: false,
         errors: errors.array() 
-      });prisma.user.findUnique({ 
+      });
+    }
+
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({ 
       where: { email } 
     });
 
@@ -112,13 +118,7 @@ exports.login = async (req, res) => {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.
-        message: 'Account has been deactivated' 
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await user.comparePassword(password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({ 
@@ -157,7 +157,9 @@ exports.login = async (req, res) => {
 // @desc    Get current logged in user
 // @route   GET /api/auth/me
 // @access  Private
-exports.getMe = async (prisma.user.findUnique({
+exports.getMe = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: {
         id: true,
@@ -202,8 +204,6 @@ exports.getAllUsers = async (req, res) => {
         updatedAt: true
       },
       orderBy: { createdAt: 'desc' }
-    const users = await User.findAll({
-      order: [['createdAt', 'DESC']]
     });
 
     res.status(200).json({
