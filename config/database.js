@@ -13,19 +13,14 @@ const sequelize = new Sequelize(
       ssl: {
         rejectUnauthorized: false
       },
-      connectTimeout: 60000,
-      enableKeepAlive: true,
-      keepAliveInitialDelay: 0
+      connectTimeout: 10000
     },
-    logging: console.log,
+    logging: false, // Disable logging in production
     pool: {
-      max: 5,
+      max: 2,
       min: 0,
-      acquire: 60000,
+      acquire: 30000,
       idle: 10000
-    },
-    retry: {
-      max: 3
     }
   }
 );
@@ -36,18 +31,17 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ MySQL connected successfully');
     
-    // Sync models with database
-    await sequelize.sync({ alter: false });
-    console.log('✅ Database synced');
+    // Sync models with database (only if not in serverless)
+    if (process.env.VERCEL !== '1') {
+      await sequelize.sync({ alter: false });
+      console.log('✅ Database synced');
+    }
   } catch (error) {
     console.error('❌ Unable to connect to MySQL:', error.message);
-    console.error('Connection details:', {
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER
-    });
-    process.exit(1);
+    // Don't exit process in serverless environment
+    if (process.env.VERCEL !== '1') {
+      process.exit(1);
+    }
   }
 };
 
