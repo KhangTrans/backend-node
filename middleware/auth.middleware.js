@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User.model');
+const prisma = require('../lib/prisma');
 
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
@@ -23,7 +23,17 @@ exports.protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Get user from token
-    const user = await User.findByPk(decoded.id);
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true
+      }
+    });
 
     if (!user) {
       return res.status(401).json({ 

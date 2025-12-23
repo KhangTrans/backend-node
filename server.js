@@ -9,30 +9,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-// Lazy database connection - only connect when needed
-let dbConnected = false;
-const ensureDBConnection = async () => {
-  if (!dbConnected) {
-    const { connectDB } = require('./config/database');
-    await connectDB();
-    dbConnected = true;
-  }
-};
-
 // Routes
-app.use('/api/auth', async (req, res, next) => {
-  try {
-    await ensureDBConnection();
-    next();
-  } catch (error) {
-    console.error('Database connection error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Database connection failed',
-      error: error.message 
-    });
-  }
-}, require('./routes/auth.routes'));
+app.use('/api/auth', require('./routes/auth.routes'));
 
 // Basic route
 app.get('/', (req, res) => {
@@ -48,7 +26,7 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok',
-    database: dbConnected ? 'connected' : 'not connected'
+    timestamp: new Date().toISOString()
   });
 });
 

@@ -1,7 +1,7 @@
-const User = require('../models/User.model');
+const prisma = require('../lib/prisma');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { validationResult } = require('express-validator');
-const { Op } = require('sequelize');
 
 // Generate JWT Token
 const generateToken = (userId) => {
@@ -27,9 +27,9 @@ exports.register = async (req, res) => {
     const { username, email, password, fullName } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ 
+    const existingUser = await prisma.user.findFirst({
       where: {
-        [Op.or]: [{ email }, { username }]
+        OR: [{ email }, { username }]
       }
     });
 
@@ -40,12 +40,18 @@ exports.register = async (req, res) => {
       });
     }
 
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     // Create new user
-    const user = await User.create({
-      username,
-      email,
-      password,
-      fullName
+    const user = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+        fullName
+      }
     });
 
     // Generate token
@@ -86,13 +92,9 @@ exports.login = async (req, res) => {
       return res.status(400).json({ 
         success: false,
         errors: errors.array() 
-      });
-    }
-
-    const { email, password } = req.body;
-
-    // Check if user exists
-    const user = await User.findOne({ where: { email } });
+      });prisma.user.findUnique({ 
+      where: { email } 
+    });
 
     if (!user) {
       return res.status(401).json({ 
@@ -105,6 +107,12 @@ exports.login = async (req, res) => {
     if (!user.isActive) {
       return res.status(401).json({ 
         success: false,
+        message: 'Account has been deactivated' 
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.
         message: 'Account has been deactivated' 
       });
     }
@@ -149,9 +157,19 @@ exports.login = async (req, res) => {
 // @desc    Get current logged in user
 // @route   GET /api/auth/me
 // @access  Private
-exports.getMe = async (req, res) => {
-  try {
-    const user = await User.findByPk(req.user.id);
+exports.getMe = async (prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -172,6 +190,18 @@ exports.getMe = async (req, res) => {
 // @access  Public (for testing - should be protected in production)
 exports.getAllUsers = async (req, res) => {
   try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true
+      },
+      orderBy: { createdAt: 'desc' }
     const users = await User.findAll({
       order: [['createdAt', 'DESC']]
     });
