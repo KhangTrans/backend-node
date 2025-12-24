@@ -9,16 +9,19 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Configure Multer Storage for Cloudinary
+// Configure Multer Storage for Cloudinary - Vercel serverless compatible
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'products', // Folder name in Cloudinary
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-    transformation: [
-      { width: 1000, height: 1000, crop: 'limit' }, // Limit max size
-      { quality: 'auto' } // Auto quality
-    ]
+  params: async (req, file) => {
+    return {
+      folder: 'products',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+      transformation: [
+        { width: 1000, height: 1000, crop: 'limit' },
+        { quality: 'auto' }
+      ],
+      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`
+    };
   }
 });
 
@@ -29,7 +32,6 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024 // 5MB max file size
   },
   fileFilter: (req, file, cb) => {
-    // Check file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
