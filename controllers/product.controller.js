@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { validationResult } = require('express-validator');
+const { generateUniqueSlug } = require('../utils/slug');
 
 // @desc    Create new product
 // @route   POST /api/products
@@ -15,16 +16,39 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    const { name, description, price, stock, category, images, variants } = req.body;
+    const { 
+      name, 
+      slug: customSlug,
+      description, 
+      price, 
+      stock, 
+      category, 
+      metaTitle,
+      metaDescription,
+      metaKeywords,
+      canonicalUrl,
+      images, 
+      variants 
+    } = req.body;
+
+    // Generate unique slug
+    const slug = customSlug 
+      ? await generateUniqueSlug(customSlug, null, prisma)
+      : await generateUniqueSlug(name, null, prisma);
 
     // Create product with images and variants
     const product = await prisma.product.create({
       data: {
         name,
+        slug,
         description,
         price: parseFloat(price),
         stock: parseInt(stock) || 0,
         category,
+        metaTitle: metaTitle || name,
+        metaDescription: metaDescription || description?.substring(0, 160),
+        metaKeywords,
+        canonicalUrl,
         createdBy: req.user.id,
         images: images && images.length > 0 ? {
           create: images.map((img, index) => ({
@@ -184,6 +208,54 @@ exports.getProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Get product error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error getting product',
+      error: error.message 
+    });
+  }
+};
+
+// @desc    Get product by slug (SEO-friendly URL)
+// @route   GET /api/products/slug/:slug
+// @access  Public
+exports.getProductBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const product = await prisma.product.findUnique({
+      where: { slug },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            email: true
+          }
+        },
+        images: {
+          orderBy: { order: 'asc' }
+        },
+        variants: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: product
+    });
+  } catch (error) {
+    console.error('Get product by slug error:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error getting product',

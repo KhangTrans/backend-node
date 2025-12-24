@@ -47,17 +47,22 @@ GET https://backend-node-lilac-seven.vercel.app/api/products?search=laptop
 ### Get single product
 GET https://backend-node-lilac-seven.vercel.app/api/products/1
 
-### Create product with images and variants (need token)
+### Create product with SEO + images + variants (need token)
 POST https://backend-node-lilac-seven.vercel.app/api/products
 Authorization: Bearer YOUR_TOKEN_HERE
 Content-Type: application/json
 
 {
   "name": "iPhone 15 Pro Max",
-  "description": "Điện thoại flagship mới nhất của Apple với chip A17 Pro",
+  "slug": "iphone-15-pro-max",
+  "description": "Điện thoại flagship mới nhất của Apple với chip A17 Pro, màn hình Super Retina XDR 6.7 inch, camera 48MP chuyên nghiệp",
   "price": 29990000,
   "stock": 100,
   "category": "Electronics",
+  "metaTitle": "iPhone 15 Pro Max - Giá Tốt Nhất 2025 | YourStore",
+  "metaDescription": "Mua iPhone 15 Pro Max chính hãng giá rẻ. Chip A17 Pro mạnh mẽ, camera 48MP pro, màn hình 6.7 inch. Trả góp 0%, giao hàng miễn phí.",
+  "metaKeywords": "iphone 15 pro max, iphone 15, điện thoại iphone, apple iphone, mua iphone",
+  "canonicalUrl": "https://yourdomain.com/products/iphone-15-pro-max",
   "images": [
     {
       "imageUrl": "https://cdn.example.com/iphone15-front.jpg",
@@ -117,3 +122,14 @@ Content-Type: application/json
 ### Delete product (need token)
 DELETE https://backend-node-lilac-seven.vercel.app/api/products/1
 Authorization: Bearer YOUR_TOKEN_HERE
+
+### ========== SEO ENDPOINTS ==========
+
+### Get product by slug (SEO-friendly URL)
+GET https://backend-node-lilac-seven.vercel.app/api/products/slug/iphone-15-pro-max
+
+### Get XML sitemap
+GET https://backend-node-lilac-seven.vercel.app/api/sitemap.xml
+
+### Get robots.txt
+GET https://backend-node-lilac-seven.vercel.app/api/robots.txt
