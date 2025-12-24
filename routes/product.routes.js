@@ -24,9 +24,10 @@ const productValidation = [
     .optional()
     .isInt({ min: 0 })
     .withMessage('Stock must be a non-negative integer'),
-  body('category')
+  body('categoryId')
     .optional()
-    .trim(),
+    .isInt()
+    .withMessage('Category ID must be an integer'),
   body('images')
     .optional()
     .isArray()

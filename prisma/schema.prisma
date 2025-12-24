@@ -30,6 +30,21 @@ enum Role {
   admin
 }
 
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(100)
+  slug        String    @unique @db.VarChar(150)
+  description String?   @db.Text
+  imageUrl    String?   @db.VarChar(500)
+  isActive    Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+  @@map("categories")
+}
+
 model Product {
   id              Int              @id @default(autoincrement())
   name            String           @db.VarChar(200)
@@ -37,7 +52,8 @@ model Product {
   description     String?          @db.Text
   price           Decimal          @db.Decimal(10, 2)
   stock           Int              @default(0)
-  category        String?          @db.VarChar(100)
+  categoryId      Int?
+  category        Category?        @relation(fields: [categoryId], references: [id])
   metaTitle       String?          @db.VarChar(200)
   metaDescription String?          @db.VarChar(500)
   metaKeywords    String?          @db.VarChar(500)
@@ -51,7 +67,7 @@ model Product {
   updatedAt       DateTime         @updatedAt
 
   @@index([slug])
-  @@index([category])
+  @@index([categoryId])
   @@index([createdBy])
   @@map("products")
 }

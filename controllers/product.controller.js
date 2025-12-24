@@ -22,7 +22,7 @@ exports.createProduct = async (req, res) => {
       description, 
       price, 
       stock, 
-      category, 
+      categoryId, 
       metaTitle,
       metaDescription,
       metaKeywords,
@@ -44,7 +44,7 @@ exports.createProduct = async (req, res) => {
         description,
         price: parseFloat(price),
         stock: parseInt(stock) || 0,
-        category,
+        categoryId: categoryId ? parseInt(categoryId) : null,
         metaTitle: metaTitle || name,
         metaDescription: metaDescription || description?.substring(0, 160),
         metaKeywords,
@@ -77,6 +77,7 @@ exports.createProduct = async (req, res) => {
             email: true
           }
         },
+        category: true,
         images: {
           orderBy: { order: 'asc' }
         },
@@ -103,8 +104,7 @@ exports.createProduct = async (req, res) => {
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = async (req, res) => {
-  try {
-    const { page = 1, limit = 10, category, search } = req.query;
+  try {Id, search } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -113,8 +113,8 @@ exports.getAllProducts = async (req, res) => {
       isActive: true
     };
     
-    if (category) {
-      where.category = category;
+    if (categoryId) {
+      where.categoryId = parseInt(categoryId);
     }
     
     if (search) {
@@ -138,6 +138,8 @@ exports.getAllProducts = async (req, res) => {
               username: true,
               fullName: true
             }
+          },
+          category: true }
           },
           images: {
             orderBy: { order: 'asc' }
@@ -184,6 +186,7 @@ exports.getProduct = async (req, res) => {
             username: true,
             fullName: true,
             email: true
+        category: true,
           }
         },
         images: {
@@ -232,6 +235,7 @@ exports.getProductBySlug = async (req, res) => {
             username: true,
             fullName: true,
             email: true
+        category: true,
           }
         },
         images: {

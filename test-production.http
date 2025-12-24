@@ -30,10 +30,50 @@ GET https://backend-node-lilac-seven.vercel.app/api/auth/users
 GET https://backend-node-lilac-seven.vercel.app/api/auth/me
 Authorization: Bearer YOUR_TOKEN_HERE
 
+### ========== CATEGORIES ==========
+
+### Get all categories
+GET https://backend-node-lilac-seven.vercel.app/api/categories
+
+### Get all categories with products
+GET https://backend-node-lilac-seven.vercel.app/api/categories?includeProducts=true
+
+### Get single category
+GET https://backend-node-lilac-seven.vercel.app/api/categories/1
+
+### Create category (need admin token)
+POST https://backend-node-lilac-seven.vercel.app/api/categories
+Authorization: Bearer YOUR_ADMIN_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Tai nghe",
+  "slug": "tai-nghe",
+  "description": "Tai nghe bluetooth, có dây, gaming",
+  "imageUrl": "https://example.com/tai-nghe.jpg"
+}
+
+### Update category (need admin token)
+PUT https://backend-node-lilac-seven.vercel.app/api/categories/1
+Authorization: Bearer YOUR_ADMIN_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Điện thoại di động",
+  "description": "Điện thoại thông minh mới nhất"
+}
+
+### Delete category (need admin token)
+DELETE https://backend-node-lilac-seven.vercel.app/api/categories/4
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
 ### ========== PRODUCTS ==========
 
 ### Get all products
 GET https://backend-node-lilac-seven.vercel.app/api/products
+
+### Get products by category
+GET https://backend-node-lilac-seven.vercel.app/api/products?categoryId=1
 
 ### Get products with pagination
 GET https://backend-node-lilac-seven.vercel.app/api/products?page=1&limit=10
@@ -58,7 +98,7 @@ Content-Type: application/json
   "description": "Điện thoại flagship mới nhất của Apple với chip A17 Pro, màn hình Super Retina XDR 6.7 inch, camera 48MP chuyên nghiệp",
   "price": 29990000,
   "stock": 100,
-  "category": "Electronics",
+  "categoryId": 1,
   "metaTitle": "iPhone 15 Pro Max - Giá Tốt Nhất 2025 | YourStore",
   "metaDescription": "Mua iPhone 15 Pro Max chính hãng giá rẻ. Chip A17 Pro mạnh mẽ, camera 48MP pro, màn hình 6.7 inch. Trả góp 0%, giao hàng miễn phí.",
   "metaKeywords": "iphone 15 pro max, iphone 15, điện thoại iphone, apple iphone, mua iphone",
