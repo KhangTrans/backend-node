@@ -104,7 +104,8 @@ exports.createProduct = async (req, res) => {
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = async (req, res) => {
-  try {Id, search } = req.query;
+  try {
+    const { page = 1, limit = 10, categoryId, search } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -139,8 +140,7 @@ exports.getAllProducts = async (req, res) => {
               fullName: true
             }
           },
-          category: true }
-          },
+          category: true,
           images: {
             orderBy: { order: 'asc' }
           },
@@ -186,9 +186,9 @@ exports.getProduct = async (req, res) => {
             username: true,
             fullName: true,
             email: true
-        category: true,
           }
         },
+        category: true,
         images: {
           orderBy: { order: 'asc' }
         },
@@ -325,15 +325,7 @@ exports.updateProduct = async (req, res) => {
         name,
         slug: newSlug,
         description,
-        pri
-        },
-        category: true,
-        images: {
-          orderBy: { order: 'asc' }
-        },
-        variants: true
-      }
-    });ce: price ? parseFloat(price) : undefined,
+        price: price ? parseFloat(price) : undefined,
         stock: stock !== undefined ? parseInt(stock) : undefined,
         categoryId: categoryId ? parseInt(categoryId) : undefined,
         metaTitle: metaTitle || (name ? name : undefined),
@@ -350,16 +342,11 @@ exports.updateProduct = async (req, res) => {
             fullName: true
           }
         },
+        category: true,
         images: {
           orderBy: { order: 'asc' }
         },
-        variants: trueser: {
-          select: {
-            id: true,
-            username: true,
-            fullName: true
-          }
-        }
+        variants: true
       }
     });
 
