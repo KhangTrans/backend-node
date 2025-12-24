@@ -67,6 +67,45 @@ Content-Type: application/json
 DELETE https://backend-node-lilac-seven.vercel.app/api/categories/4
 Authorization: Bearer YOUR_ADMIN_TOKEN
 
+### ========== UPLOAD IMAGES ==========
+
+### Upload single image
+POST https://backend-node-lilac-seven.vercel.app/api/upload/image
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="product.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/your/image.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Upload multiple images
+POST https://backend-node-lilac-seven.vercel.app/api/upload/images
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="product1.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/image1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="product2.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/image2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Delete image (replace publicId with actual public_id from upload response)
+DELETE https://backend-node-lilac-seven.vercel.app/api/upload/image/products%2Ffilename
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Get upload signature for client-side upload
+GET https://backend-node-lilac-seven.vercel.app/api/upload/signature?folder=products
+Authorization: Bearer YOUR_TOKEN_HERE
+
 ### ========== PRODUCTS ==========
 
 ### Get all products
