@@ -235,9 +235,9 @@ exports.getProductBySlug = async (req, res) => {
             username: true,
             fullName: true,
             email: true
-        category: true,
           }
         },
+        category: true,
         images: {
           orderBy: { order: 'asc' }
         },
@@ -268,7 +268,25 @@ exports.getProductBySlug = async (req, res) => {
   }
 };
 
-// @desc    Update productcategory, isActive, images, variants } = req.body;
+// @desc    Update product
+// @route   PUT /api/products/:id
+// @access  Private
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      name, 
+      slug: customSlug,
+      description, 
+      price, 
+      stock, 
+      categoryId, 
+      metaTitle,
+      metaDescription,
+      metaKeywords,
+      canonicalUrl,
+      isActive 
+    } = req.body;
 
     // Check if product exists
     const existingProduct = await prisma.product.findUnique({
@@ -290,15 +308,38 @@ exports.getProductBySlug = async (req, res) => {
       });
     }
 
+    // Generate new slug if name changed or custom slug provided
+    let newSlug = existingProduct.slug;
+    if (customSlug || (name && name !== existingProduct.name)) {
+      newSlug = await generateUniqueSlug(
+        customSlug || name, 
+        parseInt(id), 
+        prisma
+      );
+    }
+
     // Update product
     const product = await prisma.product.update({
       where: { id: parseInt(id) },
       data: {
         name,
+        slug: newSlug,
         description,
-        price: price ? parseFloat(price) : undefined,
+        pri
+        },
+        category: true,
+        images: {
+          orderBy: { order: 'asc' }
+        },
+        variants: true
+      }
+    });ce: price ? parseFloat(price) : undefined,
         stock: stock !== undefined ? parseInt(stock) : undefined,
-        category,
+        categoryId: categoryId ? parseInt(categoryId) : undefined,
+        metaTitle: metaTitle || (name ? name : undefined),
+        metaDescription,
+        metaKeywords,
+        canonicalUrl,
         isActive
       },
       include: {
