@@ -1,6 +1,16 @@
 const { cloudinary } = require('../config/cloudinary');
+const { Readable } = require('stream');
 
-// @desc    Upload single image
+// Helper function to convert buffer to stream
+function bufferToStream(buffer) {
+  const readable = new Readable();
+  readable._read = () => {};
+  readable.push(buffer);
+  readable.push(null);
+  return readable;
+}
+
+// @desc    Upload single image (with multer)
 // @route   POST /api/upload/image
 // @access  Private
 exports.uploadImage = async (req, res) => {
@@ -26,6 +36,51 @@ exports.uploadImage = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload image error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading image',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Upload image from base64 (serverless-friendly)
+// @route   POST /api/upload/base64
+// @access  Private
+exports.uploadBase64 = async (req, res) => {
+  try {
+    const { image, folder = 'products' } = req.body;
+
+    if (!image) {
+      return res.status(400).json({
+        success: false,
+        message: 'No image data provided'
+      });
+    }
+
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(image, {
+      folder: folder,
+      transformation: [
+        { width: 1000, height: 1000, crop: 'limit' },
+        { quality: 'auto' }
+      ]
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: {
+        url: result.secure_url,
+        publicId: result.public_id,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        size: result.bytes
+      }
+    });
+  } catch (error) {
+    console.error('Upload base64 error:', error);
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
