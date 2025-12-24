@@ -29,3 +29,49 @@ GET https://backend-node-lilac-seven.vercel.app/api/auth/users
 ### Get current user (Production - need token)
 GET https://backend-node-lilac-seven.vercel.app/api/auth/me
 Authorization: Bearer YOUR_TOKEN_HERE
+
+### ========== PRODUCTS ==========
+
+### Get all products
+GET https://backend-node-lilac-seven.vercel.app/api/products
+
+### Get products with pagination
+GET https://backend-node-lilac-seven.vercel.app/api/products?page=1&limit=10
+
+### Get products by category
+GET https://backend-node-lilac-seven.vercel.app/api/products?category=Electronics
+
+### Search products
+GET https://backend-node-lilac-seven.vercel.app/api/products?search=laptop
+
+### Get single product
+GET https://backend-node-lilac-seven.vercel.app/api/products/1
+
+### Create product (need token)
+POST https://backend-node-lilac-seven.vercel.app/api/products
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "name": "Laptop Dell XPS 13",
+  "description": "Laptop cao cấp cho dân văn phòng",
+  "price": 25000000,
+  "stock": 10,
+  "category": "Electronics",
+  "imageUrl": "https://example.com/laptop.jpg"
+}
+
+### Update product (need token)
+PUT https://backend-node-lilac-seven.vercel.app/api/products/1
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "name": "Laptop Dell XPS 13 Updated",
+  "price": 24000000,
+  "stock": 8
+}
+
+### Delete product (need token)
+DELETE https://backend-node-lilac-seven.vercel.app/api/products/1
+Authorization: Bearer YOUR_TOKEN_HERE

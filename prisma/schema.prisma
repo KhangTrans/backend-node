@@ -16,6 +16,7 @@ model User {
   fullName  String?  @db.VarChar(100)
   role      Role     @default(user)
   isActive  Boolean  @default(true)
+  products  Product[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -27,4 +28,23 @@ model User {
 enum Role {
   user
   admin
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(200)
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  imageUrl    String?  @db.VarChar(500)
+  category    String?  @db.VarChar(100)
+  isActive    Boolean  @default(true)
+  createdBy   Int
+  user        User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([createdBy])
+  @@map("products")
 }
