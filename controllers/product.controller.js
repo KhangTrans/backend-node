@@ -15,18 +15,35 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    const { name, description, price, stock, imageUrl, category } = req.body;
+    const { name, description, price, stock, category, images, variants } = req.body;
 
-    // Create product
+    // Create product with images and variants
     const product = await prisma.product.create({
       data: {
         name,
         description,
         price: parseFloat(price),
         stock: parseInt(stock) || 0,
-        imageUrl,
         category,
-        createdBy: req.user.id
+        createdBy: req.user.id,
+        images: images && images.length > 0 ? {
+          create: images.map((img, index) => ({
+            imageUrl: img.imageUrl || img,
+            isPrimary: img.isPrimary || index === 0,
+            order: img.order || index
+          }))
+        } : undefined,
+        variants: variants && variants.length > 0 ? {
+          create: variants.map(v => ({
+            name: v.name,
+            sku: v.sku,
+            price: v.price ? parseFloat(v.price) : null,
+            stock: parseInt(v.stock) || 0,
+            color: v.color,
+            size: v.size,
+            material: v.material
+          }))
+        } : undefined
       },
       include: {
         user: {
@@ -35,7 +52,11 @@ exports.createProduct = async (req, res) => {
             username: true,
             email: true
           }
-        }
+        },
+        images: {
+          orderBy: { order: 'asc' }
+        },
+        variants: true
       }
     });
 
@@ -93,6 +114,12 @@ exports.getAllProducts = async (req, res) => {
               username: true,
               fullName: true
             }
+          },
+          images: {
+            orderBy: { order: 'asc' }
+          },
+          variants: {
+            where: { isActive: true }
           }
         }
       }),
@@ -134,6 +161,12 @@ exports.getProduct = async (req, res) => {
             fullName: true,
             email: true
           }
+        },
+        images: {
+          orderBy: { order: 'asc' }
+        },
+        variants: {
+          orderBy: { createdAt: 'asc' }
         }
       }
     });
@@ -159,13 +192,7 @@ exports.getProduct = async (req, res) => {
   }
 };
 
-// @desc    Update product
-// @route   PUT /api/products/:id
-// @access  Private
-exports.updateProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, description, price, stock, imageUrl, category, isActive } = req.body;
+// @desc    Update productcategory, isActive, images, variants } = req.body;
 
     // Check if product exists
     const existingProduct = await prisma.product.findUnique({
@@ -195,12 +222,21 @@ exports.updateProduct = async (req, res) => {
         description,
         price: price ? parseFloat(price) : undefined,
         stock: stock !== undefined ? parseInt(stock) : undefined,
-        imageUrl,
         category,
         isActive
       },
       include: {
         user: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true
+          }
+        },
+        images: {
+          orderBy: { order: 'asc' }
+        },
+        variants: trueser: {
           select: {
             id: true,
             username: true,

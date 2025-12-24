@@ -24,14 +24,17 @@ const productValidation = [
     .optional()
     .isInt({ min: 0 })
     .withMessage('Stock must be a non-negative integer'),
-  body('imageUrl')
-    .optional()
-    .trim()
-    .isURL()
-    .withMessage('Image URL must be valid'),
   body('category')
     .optional()
-    .trim()
+    .trim(),
+  body('images')
+    .optional()
+    .isArray()
+    .withMessage('Images must be an array'),
+  body('variants')
+    .optional()
+    .isArray()
+    .withMessage('Variants must be an array')
 ];
 
 // Routes

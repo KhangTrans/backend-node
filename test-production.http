@@ -47,18 +47,60 @@ GET https://backend-node-lilac-seven.vercel.app/api/products?search=laptop
 ### Get single product
 GET https://backend-node-lilac-seven.vercel.app/api/products/1
 
-### Create product (need token)
+### Create product with images and variants (need token)
 POST https://backend-node-lilac-seven.vercel.app/api/products
 Authorization: Bearer YOUR_TOKEN_HERE
 Content-Type: application/json
 
 {
-  "name": "Laptop Dell XPS 13",
-  "description": "Laptop cao cấp cho dân văn phòng",
-  "price": 25000000,
-  "stock": 10,
+  "name": "iPhone 15 Pro Max",
+  "description": "Điện thoại flagship mới nhất của Apple với chip A17 Pro",
+  "price": 29990000,
+  "stock": 100,
   "category": "Electronics",
-  "imageUrl": "https://example.com/laptop.jpg"
+  "images": [
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-front.jpg",
+      "isPrimary": true,
+      "order": 0
+    },
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-back.jpg",
+      "isPrimary": false,
+      "order": 1
+    },
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-side.jpg",
+      "isPrimary": false,
+      "order": 2
+    }
+  ],
+  "variants": [
+    {
+      "name": "iPhone 15 Pro Max - Titan Tự Nhiên - 256GB",
+      "sku": "IP15PM-TIT-256",
+      "price": 29990000,
+      "stock": 30,
+      "color": "Titan Tự Nhiên",
+      "size": "256GB"
+    },
+    {
+      "name": "iPhone 15 Pro Max - Titan Xanh - 256GB",
+      "sku": "IP15PM-BLUE-256",
+      "price": 29990000,
+      "stock": 25,
+      "color": "Titan Xanh",
+      "size": "256GB"
+    },
+    {
+      "name": "iPhone 15 Pro Max - Titan Đen - 512GB",
+      "sku": "IP15PM-BLK-512",
+      "price": 34990000,
+      "stock": 20,
+      "color": "Titan Đen",
+      "size": "512GB"
+    }
+  ]
 }
 
 ### Update product (need token)
