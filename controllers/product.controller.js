@@ -285,12 +285,18 @@ exports.updateProduct = async (req, res) => {
       metaDescription,
       metaKeywords,
       canonicalUrl,
-      isActive 
+      isActive,
+      images,
+      variants 
     } = req.body;
 
     // Check if product exists
     const existingProduct = await prisma.product.findUnique({
-      where: { id: parseInt(id) }
+      where: { id: parseInt(id) },
+      include: {
+        images: true,
+        variants: true
+      }
     });
 
     if (!existingProduct) {
@@ -318,22 +324,67 @@ exports.updateProduct = async (req, res) => {
       );
     }
 
+    // Prepare update data
+    const updateData = {
+      name,
+      slug: newSlug,
+      description,
+      price: price ? parseFloat(price) : undefined,
+      stock: stock !== undefined ? parseInt(stock) : undefined,
+      categoryId: categoryId ? parseInt(categoryId) : undefined,
+      metaTitle: metaTitle || (name ? name : undefined),
+      metaDescription,
+      metaKeywords,
+      canonicalUrl,
+      isActive
+    };
+
+    // Handle images update if provided
+    if (images !== undefined) {
+      // Delete existing images
+      await prisma.productImage.deleteMany({
+        where: { productId: parseInt(id) }
+      });
+
+      // Add new images if provided
+      if (images && images.length > 0) {
+        updateData.images = {
+          create: images.map((img, index) => ({
+            imageUrl: img.imageUrl || img,
+            isPrimary: img.isPrimary || index === 0,
+            order: img.order !== undefined ? img.order : index
+          }))
+        };
+      }
+    }
+
+    // Handle variants update if provided
+    if (variants !== undefined) {
+      // Delete existing variants
+      await prisma.productVariant.deleteMany({
+        where: { productId: parseInt(id) }
+      });
+
+      // Add new variants if provided
+      if (variants && variants.length > 0) {
+        updateData.variants = {
+          create: variants.map(v => ({
+            name: v.name,
+            sku: v.sku,
+            price: v.price ? parseFloat(v.price) : null,
+            stock: parseInt(v.stock) || 0,
+            color: v.color,
+            size: v.size,
+            material: v.material
+          }))
+        };
+      }
+    }
+
     // Update product
     const product = await prisma.product.update({
       where: { id: parseInt(id) },
-      data: {
-        name,
-        slug: newSlug,
-        description,
-        price: price ? parseFloat(price) : undefined,
-        stock: stock !== undefined ? parseInt(stock) : undefined,
-        categoryId: categoryId ? parseInt(categoryId) : undefined,
-        metaTitle: metaTitle || (name ? name : undefined),
-        metaDescription,
-        metaKeywords,
-        canonicalUrl,
-        isActive
-      },
+      data: updateData,
       include: {
         user: {
           select: {

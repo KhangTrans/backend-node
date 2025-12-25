@@ -47,10 +47,58 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 Content-Type: application/json
 
 {
+  "name": "Điện thoại",
+  "slug": "dien-thoai",
+  "description": "Điện thoại thông minh từ các thương hiệu hàng đầu như Apple, Samsung, Oppo, Xiaomi, Realme",
+  "imageUrl": "https://cdn.hoanghamobile.com/i/cat/Uploads/2023/08/17/image-removebg-preview-1.png"
+}
+
+### Create category - Laptop
+POST https://backend-node-lilac-seven.vercel.app/api/categories
+Authorization: Bearer YOUR_ADMIN_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Laptop",
+  "slug": "laptop",
+  "description": "Laptop văn phòng, gaming, và cao cấp từ Dell, HP, Asus, Lenovo, MacBook Pro, MacBook Air",
+  "imageUrl": "https://cdn.hoanghamobile.com/i/cat/Uploads/2021/05/12/laptop.png"
+}
+
+### Create category - Máy tính bảng
+POST https://backend-node-lilac-seven.vercel.app/api/categories
+Authorization: Bearer YOUR_ADMIN_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Máy tính bảng",
+  "slug": "may-tinh-bang",
+  "description": "iPad, Samsung Galaxy Tab, Xiaomi Pad và các máy tính bảng Android khác",
+  "imageUrl": "https://cdn.hoanghamobile.com/i/cat/Uploads/2020/10/13/ipad.png"
+}
+
+### Create category - Tai nghe
+POST https://backend-node-lilac-seven.vercel.app/api/categories
+Authorization: Bearer YOUR_ADMIN_TOKEN
+Content-Type: application/json
+
+{
   "name": "Tai nghe",
   "slug": "tai-nghe",
-  "description": "Tai nghe bluetooth, có dây, gaming",
-  "imageUrl": "https://example.com/tai-nghe.jpg"
+  "description": "Tai nghe Bluetooth, tai nghe có dây, tai nghe gaming, AirPods, Galaxy Buds",
+  "imageUrl": "https://cdn.hoanghamobile.com/i/cat/Uploads/2020/10/13/tai-nghe.png"
+}
+
+### Create category - Phụ kiện
+POST https://backend-node-lilac-seven.vercel.app/api/categories
+Authorization: Bearer YOUR_ADMIN_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Phụ kiện",
+  "slug": "phu-kien",
+  "description": "Sạc, cáp, ốp lưng, miếng dán màn hình, bao da, giá đỡ và các phụ kiện công nghệ khác",
+  "imageUrl": "https://cdn.hoanghamobile.com/i/cat/Uploads/2020/10/13/phu-kien.png"
 }
 
 ### Update category (need admin token)
@@ -196,6 +244,90 @@ Content-Type: application/json
   "name": "Laptop Dell XPS 13 Updated",
   "price": 24000000,
   "stock": 8
+}
+
+### Update product with images (need token)
+PUT https://backend-node-lilac-seven.vercel.app/api/products/1
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "name": "iPhone 15 Pro Max - Cập nhật",
+  "description": "Điện thoại flagship mới nhất của Apple với chip A17 Pro, màn hình Super Retina XDR 6.7 inch, camera 48MP chuyên nghiệp - Đã cập nhật",
+  "price": 28990000,
+  "stock": 150,
+  "images": [
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-new-front.jpg",
+      "isPrimary": true,
+      "order": 0
+    },
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-new-back.jpg",
+      "isPrimary": false,
+      "order": 1
+    },
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-new-side.jpg",
+      "isPrimary": false,
+      "order": 2
+    },
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-accessories.jpg",
+      "isPrimary": false,
+      "order": 3
+    }
+  ]
+}
+
+### Update product with images and variants (need token)
+PUT https://backend-node-lilac-seven.vercel.app/api/products/1
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "name": "iPhone 15 Pro Max - Phiên bản mới",
+  "description": "Điện thoại flagship mới nhất của Apple - Giá tốt nhất",
+  "price": 27990000,
+  "stock": 200,
+  "images": [
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-updated-1.jpg",
+      "isPrimary": true,
+      "order": 0
+    },
+    {
+      "imageUrl": "https://cdn.example.com/iphone15-updated-2.jpg",
+      "isPrimary": false,
+      "order": 1
+    }
+  ],
+  "variants": [
+    {
+      "name": "iPhone 15 Pro Max - Titan Tự Nhiên - 256GB",
+      "sku": "IP15PM-TIT-256-V2",
+      "price": 27990000,
+      "stock": 50,
+      "color": "Titan Tự Nhiên",
+      "size": "256GB"
+    },
+    {
+      "name": "iPhone 15 Pro Max - Titan Xanh - 512GB",
+      "sku": "IP15PM-BLUE-512-V2",
+      "price": 32990000,
+      "stock": 40,
+      "color": "Titan Xanh",
+      "size": "512GB"
+    },
+    {
+      "name": "iPhone 15 Pro Max - Titan Trắng - 1TB",
+      "sku": "IP15PM-WHT-1TB-V2",
+      "price": 39990000,
+      "stock": 30,
+      "color": "Titan Trắng",
+      "size": "1TB"
+    }
+  ]
 }
 
 ### Delete product (need token)
