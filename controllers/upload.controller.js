@@ -64,10 +64,42 @@ exports.uploadBase64 = async (req, res) => {
   try {
     const { image, folder = 'products' } = req.body;
 
+    // Validate image data
     if (!image) {
       return res.status(400).json({
         success: false,
         message: 'No image data provided'
+      });
+    }
+
+    // Validate base64 format
+    if (!image.startsWith('data:image/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid image format. Must be base64 string starting with "data:image/"'
+      });
+    }
+
+    // Check Cloudinary configuration
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.error('Cloudinary not configured. Missing environment variables.');
+      return res.status(500).json({
+        success: false,
+        message: 'Image upload service not configured. Please contact administrator.',
+        debug: process.env.NODE_ENV === 'development' ? {
+          cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+          apiKey: !!process.env.CLOUDINARY_API_KEY,
+          apiSecret: !!process.env.CLOUDINARY_API_SECRET
+        } : undefined
+      });
+    }
+
+    // Check image size (base64 string length)
+    const sizeInMB = (image.length * 0.75) / (1024 * 1024); // Approximate size
+    if (sizeInMB > 10) {
+      return res.status(400).json({
+        success: false,
+        message: `Image too large: ${sizeInMB.toFixed(2)}MB. Maximum allowed: 10MB`
       });
     }
 
@@ -94,10 +126,17 @@ exports.uploadBase64 = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload base64 error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      http_code: error.http_code,
+      name: error.name
+    });
+    
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
     });
   }
 };
@@ -206,6 +245,37 @@ exports.getUploadSignature = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error generating signature',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Test Cloudinary configuration
+// @route   GET /api/upload/test-config
+// @access  Private
+exports.testConfig = async (req, res) => {
+  try {
+    const hasCloudName = !!process.env.CLOUDINARY_CLOUD_NAME;
+    const hasApiKey = !!process.env.CLOUDINARY_API_KEY;
+    const hasApiSecret = !!process.env.CLOUDINARY_API_SECRET;
+
+    const isConfigured = hasCloudName && hasApiKey && hasApiSecret;
+
+    res.status(200).json({
+      success: isConfigured,
+      message: isConfigured ? 'Cloudinary is configured' : 'Cloudinary is NOT configured',
+      config: {
+        cloudName: hasCloudName ? process.env.CLOUDINARY_CLOUD_NAME : 'NOT SET',
+        apiKey: hasApiKey ? process.env.CLOUDINARY_API_KEY : 'NOT SET',
+        apiSecret: hasApiSecret ? '***' + process.env.CLOUDINARY_API_SECRET?.slice(-4) : 'NOT SET'
+      },
+      environment: process.env.NODE_ENV || 'development',
+      vercel: process.env.VERCEL === '1'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error checking configuration',
       error: error.message
     });
   }

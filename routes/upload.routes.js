@@ -16,6 +16,9 @@ try {
 // Routes - Base64 upload (serverless-friendly, no multer needed)
 router.post('/base64', protect, uploadController.uploadBase64);
 
+// Test configuration
+router.get('/test-config', protect, uploadController.testConfig);
+
 // Routes with multer (may not work on serverless)
 if (upload) {
   router.post('/image', protect, upload.single('image'), uploadController.uploadImage);
