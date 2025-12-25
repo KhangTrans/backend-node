@@ -10,6 +10,19 @@ function bufferToStream(buffer) {
   return readable;
 }
 
+// Helper function to parse form data in serverless
+async function parseFormData(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      const buffer = Buffer.concat(chunks);
+      resolve(buffer);
+    });
+    req.on('error', reject);
+  });
+}
+
 // @desc    Upload single image (with multer)
 // @route   POST /api/upload/image
 // @access  Private

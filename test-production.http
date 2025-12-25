@@ -117,7 +117,17 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 
 ### ========== UPLOAD IMAGES ==========
 
-### Upload single image
+### Upload image with base64 (RECOMMENDED for Vercel - Serverless)
+POST https://backend-node-lilac-seven.vercel.app/api/upload/base64
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD...",
+  "folder": "products"
+}
+
+### Upload single image (traditional - may not work on Vercel)
 POST https://backend-node-lilac-seven.vercel.app/api/upload/image
 Authorization: Bearer YOUR_TOKEN_HERE
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
@@ -129,7 +139,7 @@ Content-Type: image/jpeg
 < ./path/to/your/image.jpg
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
 
-### Upload multiple images
+### Upload multiple images (traditional - may not work on Vercel)
 POST https://backend-node-lilac-seven.vercel.app/api/upload/images
 Authorization: Bearer YOUR_TOKEN_HERE
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
