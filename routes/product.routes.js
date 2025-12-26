@@ -3,6 +3,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const productController = require('../controllers/product.controller');
 const { protect, authorize } = require('../middleware/auth.middleware');
+const { cacheMiddleware, invalidateCacheMiddleware } = require('../middleware/cache.middleware');
 
 // Validation rules
 const productValidation = [
@@ -39,11 +40,11 @@ const productValidation = [
 ];
 
 // Routes
-router.post('/', protect, productValidation, productController.createProduct);
-router.get('/', productController.getAllProducts);
-router.get('/slug/:slug', productController.getProductBySlug); // Must be before /:id
-router.get('/:id', productController.getProduct);
-router.put('/:id', protect, productController.updateProduct);
-router.delete('/:id', protect, productController.deleteProduct);
+router.post('/', protect, authorize('admin'), invalidateCacheMiddleware('products:*'), productValidation, productController.createProduct);
+router.get('/', cacheMiddleware('products', 300), productController.getAllProducts);
+router.get('/slug/:slug', cacheMiddleware('product-slug', 300), productController.getProductBySlug);
+router.get('/:id', cacheMiddleware('product', 300), productController.getProduct);
+router.put('/:id', protect, authorize('admin'), invalidateCacheMiddleware(['products:*', 'product:*', 'product-slug:*']), productController.updateProduct);
+router.delete('/:id', protect, authorize('admin'), invalidateCacheMiddleware(['products:*', 'product:*', 'product-slug:*']), productController.deleteProduct);
 
 module.exports = router;

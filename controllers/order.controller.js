@@ -1,4 +1,10 @@
 const prisma = require('../lib/prisma');
+const { notifyAdmin, notifyUser } = require('../config/socket');
+
+// Helper function to format price
+const formatPrice = (price) => {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+};
 
 // Generate unique order number
 const generateOrderNumber = () => {
@@ -236,6 +242,19 @@ const createOrder = async (req, res) => {
 
       return newOrder;
     });
+
+    // Notify admin about new order (real-time)
+    try {
+      await notifyAdmin(
+        'ORDER_CREATED',
+        'Đơn hàng mới',
+        `Đơn hàng ${order.orderNumber} từ ${customerName} (${formatPrice(order.total)})`,
+        order.id
+      );
+    } catch (notifyError) {
+      console.error('Error notifying admin:', notifyError);
+      // Don't fail the order creation if notification fails
+    }
 
     res.status(201).json({
       success: true,
@@ -553,9 +572,65 @@ const updateOrderStatus = async (req, res) => {
       where: { id: parseInt(orderId) },
       data: updateData,
       include: {
-        items: true
+        items: true,
+        user: {
+          select: { id: true, username: true, email: true }
+        }
       }
     });
+
+    // Send notification to user about order status change
+    try {
+      let notificationTitle = 'Cập nhật đơn hàng';
+      let notificationMessage = '';
+
+      if (orderStatus) {
+        switch (orderStatus) {
+          case 'confirmed':
+            notificationTitle = 'Đơn hàng đã xác nhận';
+            notificationMessage = `Đơn hàng ${order.orderNumber} đã được xác nhận và đang được xử lý`;
+            break;
+          case 'processing':
+            notificationTitle = 'Đơn hàng đang xử lý';
+            notificationMessage = `Đơn hàng ${order.orderNumber} đang được chuẩn bị`;
+            break;
+          case 'shipping':
+            notificationTitle = 'Đơn hàng đang giao';
+            notificationMessage = `Đơn hàng ${order.orderNumber} đang trên đường giao đến bạn`;
+            break;
+          case 'delivered':
+            notificationTitle = 'Đơn hàng đã giao';
+            notificationMessage = `Đơn hàng ${order.orderNumber} đã được giao thành công`;
+            break;
+          case 'cancelled':
+            notificationTitle = 'Đơn hàng đã hủy';
+            notificationMessage = `Đơn hàng ${order.orderNumber} đã bị hủy`;
+            break;
+        }
+      }
+
+      if (paymentStatus === 'paid') {
+        notificationTitle = 'Thanh toán thành công';
+        notificationMessage = `Thanh toán cho đơn hàng ${order.orderNumber} đã được xác nhận`;
+      }
+
+      if (notificationMessage) {
+        await notifyUser(
+          updatedOrder.userId,
+          orderStatus === 'cancelled' ? 'ORDER_CANCELLED' : 
+          orderStatus === 'confirmed' ? 'ORDER_CONFIRMED' :
+          orderStatus === 'shipping' ? 'ORDER_SHIPPING' :
+          orderStatus === 'delivered' ? 'ORDER_DELIVERED' :
+          paymentStatus === 'paid' ? 'PAYMENT_CONFIRMED' : 'SYSTEM',
+          notificationTitle,
+          notificationMessage,
+          updatedOrder.id
+        );
+      }
+    } catch (notifyError) {
+      console.error('Error notifying user:', notifyError);
+      // Don't fail the update if notification fails
+    }
 
     res.json({
       success: true,

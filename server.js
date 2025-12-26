@@ -1,8 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
 require('dotenv').config();
+const { connectRedis, disconnectRedis } = require('./config/redis');
+const { initializeSocket } = require('./config/socket');
 
 const app = express();
+const server = http.createServer(app);
 
 // CORS Configuration
 const corsOptions = {
@@ -34,6 +38,8 @@ app.use('/api/cart', require('./routes/cart.routes'));
 app.use('/api/orders', require('./routes/order.routes'));
 app.use('/api/addresses', require('./routes/address.routes'));
 app.use('/api/vouchers', require('./routes/voucher.routes'));
+app.use('/api/notifications', require('./routes/notification.routes'));
+app.use('/api/messages', require('./routes/chat.routes'));
 app.use('/api', require('./routes/sitemap.routes'));
 
 // Basic route
@@ -68,9 +74,32 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
+// Initialize Redis connection
+connectRedis().catch(err => {
+  console.error('Failed to connect to Redis:', err);
+});
+
+// Initialize Socket.IO (only for non-Vercel environments)
+if (process.env.VERCEL !== '1') {
+  initializeSocket(server);
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  await disconnectRedis();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT signal received: closing HTTP server');
+  await disconnectRedis();
+  process.exit(0);
+});
+
 // For Vercel serverless, don't start server
 if (process.env.VERCEL !== '1') {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
   });
 }

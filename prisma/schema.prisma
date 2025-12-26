@@ -17,12 +17,15 @@ model User {
   role      Role     @default(user)
   isActive  Boolean  @default(true)
   products  Product[]
-  cart      Cart?
-  orders    Order[]
-  addresses CustomerAddress[]
-  vouchers  Voucher[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  cart          Cart?
+  orders        Order[]
+  addresses     CustomerAddress[]
+  vouchers      Voucher[]
+  notifications Notification[]
+  sentMessages  Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([email])
   @@index([username])
@@ -302,4 +305,51 @@ model Voucher {
   @@index([userId])
   @@index([isActive])
   @@map("vouchers")
+}
+
+// Notification Models
+enum NotificationType {
+  ORDER_CREATED      // Đơn hàng mới (cho admin)
+  ORDER_CONFIRMED    // Đơn hàng đã xác nhận (cho user)
+  ORDER_SHIPPING     // Đơn hàng đang giao (cho user)
+  ORDER_DELIVERED    // Đơn hàng đã giao (cho user)
+  ORDER_CANCELLED    // Đơn hàng bị hủy
+  PAYMENT_CONFIRMED  // Thanh toán đã xác nhận
+  NEW_MESSAGE        // Tin nhắn mới
+  SYSTEM             // Thông báo hệ thống
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  message   String           @db.Text
+  orderId   Int?             // Link to order if related
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// Chat/Message Models
+model Message {
+  id         Int      @id @default(autoincrement())
+  senderId   Int
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId Int
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  message    String   @db.Text
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("messages")
 }
