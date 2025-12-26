@@ -56,11 +56,11 @@ exports.getAllCategories = async (req, res) => {
     // Build filter
     const where = { isActive: true };
 
-    // Search functionality
+    // Search functionality (MySQL doesn't support mode: 'insensitive')
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
+        { name: { contains: search } },
+        { description: { contains: search } }
       ];
     }
 
