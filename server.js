@@ -10,7 +10,7 @@ const corsOptions = {
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:3000',
-    'https://your-frontend-domain.vercel.app',
+    'https://frontend-ky7.vercel.app',
     process.env.FRONTEND_URL
   ].filter(Boolean), // Remove undefined values
   credentials: true,
@@ -30,6 +30,8 @@ app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/categories', require('./routes/category.routes'));
 app.use('/api/products', require('./routes/product.routes'));
 app.use('/api/upload', require('./routes/upload.routes'));
+app.use('/api/cart', require('./routes/cart.routes'));
+app.use('/api/orders', require('./routes/order.routes'));
 app.use('/api', require('./routes/sitemap.routes'));
 
 // Basic route

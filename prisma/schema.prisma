@@ -17,6 +17,8 @@ model User {
   role      Role     @default(user)
   isActive  Boolean  @default(true)
   products  Product[]
+  cart      Cart?
+  orders    Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -63,6 +65,8 @@ model Product {
   user            User             @relation(fields: [createdBy], references: [id])
   images          ProductImage[]
   variants        ProductVariant[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -103,4 +107,125 @@ model ProductVariant {
   @@index([productId])
   @@index([sku])
   @@map("product_variants")
+}
+
+// Cart Models
+model Cart {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+  @@map("carts")
+}
+
+model CartItem {
+  id         Int      @id @default(autoincrement())
+  cartId     Int
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity   Int      @default(1)
+  price      Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+// Order Models
+enum OrderStatus {
+  pending
+  processing
+  confirmed
+  shipping
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  cod           // Cash on delivery
+  bank_transfer
+  momo
+  vnpay
+  credit_card
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+model Order {
+  id              Int           @id @default(autoincrement())
+  orderNumber     String        @unique @db.VarChar(50)
+  userId          Int
+  user            User          @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  
+  // Customer Info
+  customerName    String        @db.VarChar(100)
+  customerEmail   String        @db.VarChar(100)
+  customerPhone   String        @db.VarChar(20)
+  
+  // Shipping Info
+  shippingAddress String        @db.VarChar(500)
+  shippingCity    String        @db.VarChar(100)
+  shippingDistrict String?      @db.VarChar(100)
+  shippingWard    String?       @db.VarChar(100)
+  shippingNote    String?       @db.Text
+  
+  // Payment & Status
+  paymentMethod   PaymentMethod
+  paymentStatus   PaymentStatus @default(pending)
+  orderStatus     OrderStatus   @default(pending)
+  
+  // Pricing
+  subtotal        Decimal       @db.Decimal(15, 2)
+  shippingFee     Decimal       @default(0) @db.Decimal(15, 2)
+  discount        Decimal       @default(0) @db.Decimal(15, 2)
+  total           Decimal       @db.Decimal(15, 2)
+  
+  // Tracking
+  paidAt          DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  cancelledAt     DateTime?
+  cancellationReason String?    @db.Text
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([orderStatus])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  // Product snapshot at time of order
+  productName  String  @db.VarChar(200)
+  productImage String? @db.VarChar(500)
+  price        Decimal @db.Decimal(15, 2)
+  quantity     Int
+  subtotal     Decimal @db.Decimal(15, 2)
+  
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
 }

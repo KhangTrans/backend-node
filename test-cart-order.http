@@ -1,0 +1,346 @@
+### =================================
+### CART & ORDER API TESTING
+### =================================
+
+@baseUrl = http://localhost:5000
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzY2NzE4Nzc5LCJleHAiOjE3NjczMjM1Nzl9.IiOxlTJlte8cfIbihBvFOr8yNgH0JPFEfdIRqLfPeWU
+@adminToken = YOUR_ADMIN_TOKEN_HERE
+
+### =================================
+### 1. LOGIN - Lấy token
+### =================================
+
+### Login User
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "123456"
+}
+
+### Login Admin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+
+### =================================
+### 2. GIỎ HÀNG (CART)
+### =================================
+
+### Xem giỏ hàng
+GET {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+
+### Thêm sản phẩm vào giỏ
+POST {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "productId": 3,
+  "quantity": 2
+}
+
+### Thêm sản phẩm khác vào giỏ
+POST {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "productId": 2,
+  "quantity": 1
+}
+
+### Cập nhật số lượng sản phẩm trong giỏ (itemId = 1)
+PUT {{baseUrl}}/api/cart/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quantity": 3
+}
+
+### Xóa sản phẩm khỏi giỏ (itemId = 1)
+DELETE {{baseUrl}}/api/cart/1
+Authorization: Bearer {{token}}
+
+### Xóa toàn bộ giỏ hàng
+DELETE {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+
+### =================================
+### 3. ĐƠN HÀNG (ORDER) - USER
+### =================================
+
+### Tạo đơn hàng từ giỏ hàng
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerName": "Nguyễn Văn A",
+  "customerEmail": "nguyenvana@example.com",
+  "customerPhone": "0901234567",
+  "shippingAddress": "123 Đường Lê Lợi",
+  "shippingCity": "TP. Hồ Chí Minh",
+  "shippingDistrict": "Quận 1",
+  "shippingWard": "Phường Bến Nghé",
+  "shippingNote": "Giao giờ hành chính, gọi trước 15 phút",
+  "paymentMethod": "cod"
+}
+
+### 🔥 XEM LỊCH SỬ ĐƠN HÀNG CỦA TÔI (Tất cả đơn)
+GET {{baseUrl}}/api/orders/my
+Authorization: Bearer {{token}}
+
+### XEM LỊCH SỬ ĐƠN HÀNG - Lọc theo trạng thái pending
+GET {{baseUrl}}/api/orders/my?status=pending
+Authorization: Bearer {{token}}
+
+### XEM LỊCH SỬ ĐƠN HÀNG - Lọc theo trạng thái delivered
+GET {{baseUrl}}/api/orders/my?status=delivered
+Authorization: Bearer {{token}}
+
+### XEM LỊCH SỬ ĐƠN HÀNG - Phân trang
+GET {{baseUrl}}/api/orders/my?page=1&limit=5
+Authorization: Bearer {{token}}
+
+### 🔥 XEM CHI TIẾT ĐƠN HÀNG (orderId = 1)
+GET {{baseUrl}}/api/orders/1
+Authorization: Bearer {{token}}
+
+### XEM CHI TIẾT ĐƠN HÀNG (orderId = 2)
+GET {{baseUrl}}/api/orders/2
+Authorization: Bearer {{token}}
+
+### Hủy đơn hàng (orderId = 1)
+PUT {{baseUrl}}/api/orders/1/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Đổi ý không mua nữa"
+}
+
+### =================================
+### 4. QUẢN LÝ ĐƠN HÀNG (ADMIN)
+### =================================
+
+### Xem tất cả đơn hàng (Admin)
+GET {{baseUrl}}/api/orders/admin/all
+Authorization: Bearer {{adminToken}}
+
+### Xem đơn hàng theo trạng thái (Admin)
+GET {{baseUrl}}/api/orders/admin/all?status=pending
+Authorization: Bearer {{adminToken}}
+
+### Tìm kiếm đơn hàng (Admin)
+GET {{baseUrl}}/api/orders/admin/all?search=Nguyễn
+Authorization: Bearer {{adminToken}}
+
+### Xem đơn hàng với phân trang (Admin)
+GET {{baseUrl}}/api/orders/admin/all?page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### Cập nhật trạng thái đơn hàng (Admin) - Xác nhận đơn
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "confirmed"
+}
+
+### Cập nhật trạng thái đơn hàng (Admin) - Đang giao
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "shipping"
+}
+
+### Cập nhật trạng thái đơn hàng (Admin) - Đã giao & Đã thanh toán
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "delivered",
+  "paymentStatus": "paid"
+}
+
+### Xem thống kê đơn hàng (Admin)
+GET {{baseUrl}}/api/orders/admin/statistics
+Authorization: Bearer {{adminToken}}
+
+### =================================
+### 5. FLOW ĐẶT HÀNG ĐẦY ĐỦ
+### =================================
+
+### Step 1: Login
+# POST {{baseUrl}}/api/auth/login
+
+### Step 2: Thêm sản phẩm vào giỏ
+# POST {{baseUrl}}/api/cart (productId: 1, quantity: 2)
+
+### Step 3: Thêm thêm sản phẩm
+# POST {{baseUrl}}/api/cart (productId: 2, quantity: 1)
+
+### Step 4: Xem giỏ hàng
+# GET {{baseUrl}}/api/cart
+
+### Step 5: Cập nhật số lượng (nếu cần)
+# PUT {{baseUrl}}/api/cart/1 (quantity: 3)
+
+### Step 6: Tạo đơn hàng
+# POST {{baseUrl}}/api/orders (thông tin giao hàng)
+
+### Step 7: Xem lịch sử đơn hàng
+# GET {{baseUrl}}/api/orders/my
+
+### Step 8: Xem chi tiết đơn hàng
+# GET {{baseUrl}}/api/orders/:orderId
+
+### =================================
+### 6. TEST CÁC TRƯỜNG HỢP ĐẶC BIỆT
+### =================================
+
+### Test: Thêm sản phẩm không tồn tại
+POST {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "productId": 99999,
+  "quantity": 1
+}
+
+### Test: Thêm số lượng vượt quá tồn kho
+POST {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "productId": 1,
+  "quantity": 99999
+}
+
+### Test: Tạo đơn hàng khi giỏ hàng trống
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerName": "Test User",
+  "customerEmail": "test@example.com",
+  "customerPhone": "0901234567",
+  "shippingAddress": "123 Test St",
+  "shippingCity": "HCM",
+  "paymentMethod": "cod"
+}
+
+### Test: Xem đơn hàng của người khác (Should fail)
+GET {{baseUrl}}/api/orders/999
+Authorization: Bearer {{token}}
+
+### Test: Hủy đơn đã giao (Should fail)
+PUT {{baseUrl}}/api/orders/1/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Test"
+}
+
+### =================================
+### 7. PAYMENT METHODS TEST
+### =================================
+
+### Tạo đơn với COD
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerName": "Test COD",
+  "customerEmail": "cod@example.com",
+  "customerPhone": "0901111111",
+  "shippingAddress": "123 Test",
+  "shippingCity": "HCM",
+  "paymentMethod": "cod"
+}
+
+### Tạo đơn với Chuyển khoản
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerName": "Test Bank",
+  "customerEmail": "bank@example.com",
+  "customerPhone": "0902222222",
+  "shippingAddress": "123 Test",
+  "shippingCity": "HCM",
+  "paymentMethod": "bank_transfer"
+}
+
+### Tạo đơn với MoMo
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerName": "Test MoMo",
+  "customerEmail": "momo@example.com",
+  "customerPhone": "0903333333",
+  "shippingAddress": "123 Test",
+  "shippingCity": "HCM",
+  "paymentMethod": "momo"
+}
+
+### =================================
+### 8. ORDER STATUS FLOW (Admin)
+### =================================
+
+### pending → processing
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "processing"
+}
+
+### processing → confirmed
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "confirmed"
+}
+
+### confirmed → shipping
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "shipping"
+}
+
+### shipping → delivered
+PUT {{baseUrl}}/api/orders/admin/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderStatus": "delivered",
+  "paymentStatus": "paid"
+}
