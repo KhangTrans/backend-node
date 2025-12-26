@@ -40,8 +40,12 @@ app.use('/api/addresses', require('./routes/address.routes'));
 app.use('/api/vouchers', require('./routes/voucher.routes'));
 app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/messages', require('./routes/chat.routes'));
-// Payment routes (temporary disabled for debugging)
-// app.use('/api/payment', require('./routes/payment.routes'));
+
+// Payment routes - Only on Render (needs persistent server for callbacks)
+if (process.env.VERCEL !== '1') {
+  app.use('/api/payment', require('./routes/payment.routes'));
+}
+
 app.use('/api', require('./routes/sitemap.routes'));
 
 // Basic route
