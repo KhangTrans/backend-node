@@ -51,10 +51,21 @@ exports.createCategory = async (req, res) => {
 // @access  Public
 exports.getAllCategories = async (req, res) => {
   try {
-    const { includeProducts = false } = req.query;
+    const { includeProducts = false, search } = req.query;
+
+    // Build filter
+    const where = { isActive: true };
+
+    // Search functionality
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
+      ];
+    }
 
     const categories = await prisma.category.findMany({
-      where: { isActive: true },
+      where,
       orderBy: { name: 'asc' },
       include: includeProducts === 'true' ? {
         products: {
