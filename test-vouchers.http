@@ -1,0 +1,290 @@
+### Test Voucher Management API
+### Base URL: http://localhost:5000
+
+### Variables
+@baseUrl = http://localhost:5000/api
+@token = YOUR_USER_TOKEN_HERE
+@adminToken = YOUR_ADMIN_TOKEN_HERE
+
+### ==============================================
+### USER ENDPOINTS
+### ==============================================
+
+### 1. Get Public Vouchers (Available for user)
+GET {{baseUrl}}/vouchers/public
+Authorization: Bearer {{token}}
+
+### 2. Validate Voucher (Check before applying)
+POST {{baseUrl}}/vouchers/validate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "DISCOUNT20",
+  "orderAmount": 1000000
+}
+
+### 3. Validate Free Ship Voucher
+POST {{baseUrl}}/vouchers/validate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "FREESHIP",
+  "orderAmount": 500000
+}
+
+### ==============================================
+### ADMIN ENDPOINTS - Create Vouchers
+### ==============================================
+
+### 4. Create Discount Voucher (20% off, max 200k)
+POST {{baseUrl}}/vouchers/admin
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "DISCOUNT20",
+  "type": "DISCOUNT",
+  "description": "Giảm 20% tối đa 200k cho đơn hàng từ 500k",
+  "discountPercent": 20,
+  "maxDiscount": 200000,
+  "minOrderAmount": 500000,
+  "usageLimit": 100,
+  "startDate": "2024-12-26T00:00:00.000Z",
+  "endDate": "2025-01-31T23:59:59.000Z",
+  "isActive": true
+}
+
+### 5. Create Free Ship Voucher
+POST {{baseUrl}}/vouchers/admin
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "FREESHIP",
+  "type": "FREE_SHIP",
+  "description": "Miễn phí ship cho đơn hàng từ 300k",
+  "minOrderAmount": 300000,
+  "usageLimit": 50,
+  "startDate": "2024-12-26T00:00:00.000Z",
+  "endDate": "2025-02-28T23:59:59.000Z",
+  "isActive": true
+}
+
+### 6. Create Big Discount (50% off, max 1M)
+POST {{baseUrl}}/vouchers/admin
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "SALE50",
+  "type": "DISCOUNT",
+  "description": "Giảm 50% tối đa 1 triệu cho đơn hàng từ 2 triệu",
+  "discountPercent": 50,
+  "maxDiscount": 1000000,
+  "minOrderAmount": 2000000,
+  "usageLimit": 20,
+  "startDate": "2024-12-26T00:00:00.000Z",
+  "endDate": "2024-12-31T23:59:59.000Z",
+  "isActive": true
+}
+
+### 7. Create Unlimited Use Voucher
+POST {{baseUrl}}/vouchers/admin
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "FOREVER10",
+  "type": "DISCOUNT",
+  "description": "Giảm 10% không giới hạn",
+  "discountPercent": 10,
+  "minOrderAmount": 100000,
+  "startDate": "2024-12-26T00:00:00.000Z",
+  "endDate": "2025-12-31T23:59:59.000Z",
+  "isActive": true
+}
+
+### 8. Create Private Voucher for Specific User
+POST {{baseUrl}}/vouchers/admin
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "VIP30",
+  "type": "DISCOUNT",
+  "description": "Voucher riêng cho khách VIP - giảm 30%",
+  "discountPercent": 30,
+  "maxDiscount": 500000,
+  "minOrderAmount": 1000000,
+  "userId": 2,
+  "usageLimit": 10,
+  "startDate": "2024-12-26T00:00:00.000Z",
+  "endDate": "2025-03-31T23:59:59.000Z",
+  "isActive": true
+}
+
+### ==============================================
+### ADMIN ENDPOINTS - Read
+### ==============================================
+
+### 9. Get All Vouchers (Admin)
+GET {{baseUrl}}/vouchers/admin/all
+Authorization: Bearer {{adminToken}}
+
+### 10. Get All Vouchers with Filters
+GET {{baseUrl}}/vouchers/admin/all?type=DISCOUNT&isActive=true&page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### 11. Get Voucher by ID
+GET {{baseUrl}}/vouchers/admin/1
+Authorization: Bearer {{adminToken}}
+
+### 12. Get Voucher Statistics
+GET {{baseUrl}}/vouchers/admin/stats
+Authorization: Bearer {{adminToken}}
+
+### ==============================================
+### ADMIN ENDPOINTS - Update
+### ==============================================
+
+### 13. Update Voucher (Change discount percent)
+PUT {{baseUrl}}/vouchers/admin/1
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "discountPercent": 25,
+  "description": "Giảm 25% tối đa 200k (đã cập nhật)"
+}
+
+### 14. Deactivate Voucher
+PUT {{baseUrl}}/vouchers/admin/1
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+### 15. Extend Voucher End Date
+PUT {{baseUrl}}/vouchers/admin/1
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "endDate": "2025-03-31T23:59:59.000Z"
+}
+
+### ==============================================
+### ADMIN ENDPOINTS - Delete
+### ==============================================
+
+### 16. Delete Voucher (Only if not used)
+DELETE {{baseUrl}}/vouchers/admin/5
+Authorization: Bearer {{adminToken}}
+
+### ==============================================
+### VALIDATION TESTS
+### ==============================================
+
+### 17. Test Invalid Code
+POST {{baseUrl}}/vouchers/validate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "NOTEXIST",
+  "orderAmount": 1000000
+}
+
+### 18. Test Order Amount Too Low
+POST {{baseUrl}}/vouchers/validate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "DISCOUNT20",
+  "orderAmount": 100000
+}
+
+### 19. Test Private Voucher with Wrong User
+POST {{baseUrl}}/vouchers/validate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "VIP30",
+  "orderAmount": 2000000
+}
+
+### ==============================================
+### INTEGRATION WITH ORDER
+### ==============================================
+
+### 20. Create Order with Discount Voucher
+POST {{baseUrl}}/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productId": 1,
+      "quantity": 1
+    }
+  ],
+  "voucherCode": "DISCOUNT20",
+  "paymentMethod": "COD",
+  "note": "Áp dụng voucher giảm 20%"
+}
+
+### 21. Create Order with Free Ship Voucher
+POST {{baseUrl}}/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productId": 2,
+      "quantity": 1
+    }
+  ],
+  "voucherCode": "FREESHIP",
+  "paymentMethod": "COD",
+  "note": "Áp dụng voucher free ship"
+}
+
+### ==============================================
+### SCENARIO TESTS
+### ==============================================
+
+### Scenario 1: Create and Use Discount Voucher
+### Step 1: Admin creates voucher (request #4)
+### Step 2: User gets public vouchers (request #1)
+### Step 3: User validates voucher (request #2)
+### Step 4: User creates order with voucher (request #20)
+### Step 5: Admin checks stats (request #12) - should see usedCount increased
+
+### Scenario 2: Private Voucher for VIP User
+### Step 1: Admin creates private voucher for userId=2 (request #8)
+### Step 2: User with id=2 gets public vouchers - should see VIP30
+### Step 3: User with id=3 tries to use VIP30 - should get 403 error
+### Step 4: User with id=2 uses VIP30 successfully
+
+### Scenario 3: Voucher Usage Limit
+### Step 1: Admin creates voucher with usageLimit=2
+### Step 2: User 1 uses voucher successfully
+### Step 3: User 2 uses voucher successfully
+### Step 4: User 3 tries to use - should fail "hết lượt sử dụng"
+
+### Scenario 4: Expired Voucher
+### Step 1: Admin creates voucher with endDate in past
+### Step 2: User tries to validate - should fail "đã hết hạn"
+
+### Scenario 5: Delete Used Voucher
+### Step 1: User uses voucher in order
+### Step 2: Admin tries to delete voucher - should fail "đã được sử dụng"
+### Step 3: Admin deactivates instead (request #14)

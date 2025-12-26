@@ -23,7 +23,8 @@ const createOrder = async (req, res) => {
       shippingDistrict,
       shippingWard,
       shippingNote,
-      paymentMethod = 'cod'
+      paymentMethod = 'cod',
+      voucherCode
     } = req.body;
 
     // Validate required fields
@@ -76,13 +77,79 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // Calculate totals
+    // Calculate subtotal
     const subtotal = cart.items.reduce((sum, item) => {
       return sum + (parseFloat(item.price) * item.quantity);
     }, 0);
 
-    const shippingFee = 30000; // Fixed shipping fee (30,000 VND)
-    const discount = 0;
+    // Initialize pricing
+    let shippingFee = 30000; // Default shipping fee (30,000 VND)
+    let discount = 0;
+    let voucherId = null;
+
+    // Apply voucher if provided
+    if (voucherCode) {
+      const voucher = await prisma.voucher.findUnique({
+        where: { code: voucherCode.toUpperCase() }
+      });
+
+      if (!voucher) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mã voucher không tồn tại'
+        });
+      }
+
+      // Validate voucher
+      if (!voucher.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voucher không còn hiệu lực'
+        });
+      }
+
+      const now = new Date();
+      if (now < voucher.startDate || now > voucher.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voucher đã hết hạn hoặc chưa đến thời gian sử dụng'
+        });
+      }
+
+      if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voucher đã hết lượt sử dụng'
+        });
+      }
+
+      if (voucher.userId !== null && voucher.userId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Voucher này không dành cho bạn'
+        });
+      }
+
+      if (subtotal < parseFloat(voucher.minOrderAmount)) {
+        return res.status(400).json({
+          success: false,
+          message: `Đơn hàng tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ để sử dụng voucher này`
+        });
+      }
+
+      // Apply voucher discount
+      voucherId = voucher.id;
+      
+      if (voucher.type === 'DISCOUNT') {
+        discount = (subtotal * voucher.discountPercent) / 100;
+        if (voucher.maxDiscount) {
+          discount = Math.min(discount, parseFloat(voucher.maxDiscount));
+        }
+      } else if (voucher.type === 'FREE_SHIP') {
+        shippingFee = 0;
+      }
+    }
+
     const total = subtotal + shippingFee - discount;
 
     // Generate order number
@@ -116,6 +183,7 @@ const createOrder = async (req, res) => {
           shippingFee,
           discount,
           total,
+          voucherId,
           items: {
             create: cart.items.map(item => ({
               productId: item.productId,
@@ -132,7 +200,8 @@ const createOrder = async (req, res) => {
             include: {
               product: true
             }
-          }
+          },
+          voucher: true
         }
       });
 
@@ -143,6 +212,18 @@ const createOrder = async (req, res) => {
           data: {
             stock: {
               decrement: item.quantity
+            }
+          }
+        });
+      }
+
+      // Update voucher usage count
+      if (voucherId) {
+        await tx.voucher.update({
+          where: { id: voucherId },
+          data: {
+            usedCount: {
+              increment: 1
             }
           }
         });
@@ -192,7 +273,8 @@ const getMyOrders = async (req, res) => {
             include: {
               product: true
             }
-          }
+          },
+          voucher: true
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -249,7 +331,8 @@ const getOrderById = async (req, res) => {
             email: true,
             fullName: true
           }
-        }
+        },
+        voucher: true
       }
     });
 
@@ -399,7 +482,8 @@ const getAllOrders = async (req, res) => {
               username: true,
               email: true
             }
-          }
+          },
+          voucher: true
         },
         orderBy: { createdAt: 'desc' },
         skip,

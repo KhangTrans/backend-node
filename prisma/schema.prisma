@@ -19,6 +19,8 @@ model User {
   products  Product[]
   cart      Cart?
   orders    Order[]
+  addresses CustomerAddress[]
+  vouchers  Voucher[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -168,6 +170,8 @@ model Order {
   orderNumber     String        @unique @db.VarChar(50)
   userId          Int
   user            User          @relation(fields: [userId], references: [id])
+  voucherId       Int?
+  voucher         Voucher?      @relation(fields: [voucherId], references: [id])
   items           OrderItem[]
   
   // Customer Info
@@ -204,6 +208,7 @@ model Order {
   updatedAt       DateTime      @updatedAt
 
   @@index([userId])
+  @@index([voucherId])
   @@index([orderNumber])
   @@index([orderStatus])
   @@map("orders")
@@ -228,4 +233,73 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@map("order_items")
+}
+
+// Customer Address
+model CustomerAddress {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  fullName     String   @db.VarChar(100)
+  phoneNumber  String   @db.VarChar(20)
+  address      String   @db.VarChar(500)
+  city         String   @db.VarChar(100)
+  district     String?  @db.VarChar(100)
+  ward         String?  @db.VarChar(100)
+  
+  isDefault    Boolean  @default(false)
+  label        String?  @db.VarChar(50) // e.g., "Home", "Office", "Other"
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isDefault])
+  @@map("customer_addresses")
+}
+
+// Voucher Models
+enum VoucherType {
+  DISCOUNT    // Giảm giá theo %
+  FREE_SHIP   // Miễn phí ship
+}
+
+model Voucher {
+  id                Int          @id @default(autoincrement())
+  code              String       @unique @db.VarChar(50)
+  type              VoucherType
+  description       String?      @db.Text
+  
+  // Discount settings (for DISCOUNT type)
+  discountPercent   Int?         // Phần trăm giảm (0-100)
+  maxDiscount       Decimal?     @db.Decimal(15, 2) // Giảm tối đa (optional)
+  
+  // Usage limits
+  minOrderAmount    Decimal      @default(0) @db.Decimal(15, 2) // Giá trị đơn hàng tối thiểu
+  usageLimit        Int?         // Số lần sử dụng tối đa (null = unlimited)
+  usedCount         Int          @default(0) // Đã sử dụng bao nhiêu lần
+  
+  // User restriction
+  userId            Int?         // Nếu có = voucher riêng cho user này, null = public
+  user              User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Time validity
+  startDate         DateTime
+  endDate           DateTime
+  
+  // Status
+  isActive          Boolean      @default(true)
+  
+  // Relations
+  orders            Order[]
+  
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([code])
+  @@index([type])
+  @@index([userId])
+  @@index([isActive])
+  @@map("vouchers")
 }
