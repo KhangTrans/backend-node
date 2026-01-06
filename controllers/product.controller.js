@@ -74,7 +74,7 @@ exports.createProduct = async (req, res) => {
         path: 'createdBy',
         select: '_id username email'
       },
-      { path: 'category' }
+      { path: 'categoryId' }
     ]);
 
     res.status(201).json({
@@ -127,7 +127,7 @@ exports.getAllProducts = async (req, res) => {
           path: 'createdBy',
           select: '_id username fullName'
         })
-        .populate('category'),
+        .populate('categoryId'),
       Product.countDocuments(filter)
     ]);
 
@@ -161,7 +161,7 @@ exports.getProduct = async (req, res) => {
         path: 'createdBy',
         select: '_id username fullName email'
       })
-      .populate('category');
+      .populate('categoryId');
 
     if (!product) {
       return res.status(404).json({
@@ -196,7 +196,7 @@ exports.getProductBySlug = async (req, res) => {
         path: 'createdBy',
         select: '_id username fullName email'
       })
-      .populate('category');
+      .populate('categoryId');
 
     if (!product) {
       return res.status(404).json({
@@ -323,7 +323,7 @@ exports.updateProduct = async (req, res) => {
         path: 'createdBy',
         select: '_id username fullName'
       })
-      .populate('category');
+      .populate('categoryId');
 
     res.status(200).json({
       success: true,
