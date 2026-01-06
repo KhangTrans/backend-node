@@ -9,14 +9,9 @@ exports.generateSitemap = async (req, res) => {
     const baseUrl = process.env.FRONTEND_URL || 'https://yourdomain.com';
     
     // Get all active products
-    const products = await prisma.product.findMany({
-      where: { isActive: true },
-      select: {
-        slug: true,
-        updatedAt: true
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
+    const products = await Product.find({ isActive: true })
+      .select('slug updatedAt')
+      .sort({ updatedAt: -1 });
 
     // Generate XML sitemap
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';

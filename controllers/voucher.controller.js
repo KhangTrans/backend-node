@@ -12,22 +12,12 @@ const getAllVouchers = async (req, res) => {
     if (isActive !== undefined) where.isActive = isActive === 'true';
 
     const [vouchers, total] = await Promise.all([
-      prisma.voucher.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              email: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: parseInt(skip),
-        take: parseInt(limit)
-      }),
-      prisma.voucher.count({ where })
+      Voucher.find(where)
+        .populate('user', 'id username email')
+        .sort({ createdAt: -1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit)),
+      Voucher.countDocuments(where)
     ]);
 
     res.json({
@@ -56,18 +46,15 @@ const getPublicVouchers = async (req, res) => {
     const userId = req.user?.id;
     const now = new Date();
 
-    const vouchers = await prisma.voucher.findMany({
-      where: {
-        isActive: true,
-        startDate: { lte: now },
-        endDate: { gte: now },
-        OR: [
-          { userId: null }, // Public vouchers
-          { userId: userId } // User's private vouchers
-        ]
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const vouchers = await Voucher.find({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+      $or: [
+        { userId: null }, // Public vouchers
+        { userId: userId } // User's private vouchers
+      ]
+    }).sort({ createdAt: -1 });
 
     // Filter out vouchers that reached usage limit
     const availableVouchers = vouchers.filter(voucher => {
@@ -94,18 +81,7 @@ const getVoucherById = async (req, res) => {
   try {
     const { voucherId } = req.params;
 
-    const voucher = await prisma.voucher.findUnique({
-      where: { id: parseInt(voucherId) },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
-        }
-      }
-    });
+    const voucher = await Voucher.findById(voucherId).populate('user', 'id username email');
 
     if (!voucher) {
       return res.status(404).json({
@@ -142,9 +118,7 @@ const validateVoucher = async (req, res) => {
     }
 
     // Find voucher
-    const voucher = await prisma.voucher.findUnique({
-      where: { code: code.toUpperCase() }
-    });
+    const voucher = await Voucher.findOne({ code: code.toUpperCase() });
 
     if (!voucher) {
       return res.status(404).json({
@@ -185,7 +159,7 @@ const validateVoucher = async (req, res) => {
     }
 
     // Check user restriction
-    if (voucher.userId !== null && voucher.userId !== userId) {
+    if (voucher.userId !== null && voucher.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Voucher này không dành cho bạn'
@@ -282,9 +256,7 @@ const createVoucher = async (req, res) => {
     }
 
     // Check if code already exists
-    const existingVoucher = await prisma.voucher.findUnique({
-      where: { code: code.toUpperCase() }
-    });
+    const existingVoucher = await Voucher.findOne({ code: code.toUpperCase() });
 
     if (existingVoucher) {
       return res.status(400).json({
@@ -313,18 +285,8 @@ const createVoucher = async (req, res) => {
       }
     }
 
-    const voucher = await prisma.voucher.create({
-      data: voucherData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
-        }
-      }
-    });
+    const voucher = await Voucher.create(voucherData);
+    await voucher.populate('user', 'id username email');
 
     res.status(201).json({
       success: true,
@@ -360,9 +322,7 @@ const updateVoucher = async (req, res) => {
     } = req.body;
 
     // Find voucher
-    const existingVoucher = await prisma.voucher.findUnique({
-      where: { id: parseInt(voucherId) }
-    });
+    const existingVoucher = await Voucher.findById(voucherId);
 
     if (!existingVoucher) {
       return res.status(404).json({
@@ -373,9 +333,7 @@ const updateVoucher = async (req, res) => {
 
     // Check if new code conflicts with another voucher
     if (code && code.toUpperCase() !== existingVoucher.code) {
-      const codeExists = await prisma.voucher.findUnique({
-        where: { code: code.toUpperCase() }
-      });
+      const codeExists = await Voucher.findOne({ code: code.toUpperCase() });
       
       if (codeExists) {
         return res.status(400).json({
@@ -417,19 +375,11 @@ const updateVoucher = async (req, res) => {
       }
     }
 
-    const voucher = await prisma.voucher.update({
-      where: { id: parseInt(voucherId) },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
-        }
-      }
-    });
+    const voucher = await Voucher.findByIdAndUpdate(
+      voucherId,
+      updateData,
+      { new: true }
+    ).populate('user', 'id username email');
 
     res.json({
       success: true,
@@ -452,14 +402,7 @@ const deleteVoucher = async (req, res) => {
     const { voucherId } = req.params;
 
     // Check if voucher exists
-    const voucher = await prisma.voucher.findUnique({
-      where: { id: parseInt(voucherId) },
-      include: {
-        _count: {
-          select: { orders: true }
-        }
-      }
-    });
+    const voucher = await Voucher.findById(voucherId);
 
     if (!voucher) {
       return res.status(404).json({
@@ -468,17 +411,18 @@ const deleteVoucher = async (req, res) => {
       });
     }
 
-    // Check if voucher is used in orders
-    if (voucher._count.orders > 0) {
+    // Check if voucher is used in orders - need to import Order model
+    const Order = require('../models/Order.model');
+    const orderCount = await Order.countDocuments({ voucherId: voucherId });
+
+    if (orderCount > 0) {
       return res.status(400).json({
         success: false,
-        message: `Không thể xóa voucher đã được sử dụng trong ${voucher._count.orders} đơn hàng. Bạn có thể tắt trạng thái thay vì xóa.`
+        message: `Không thể xóa voucher đã được sử dụng trong ${orderCount} đơn hàng. Bạn có thể tắt trạng thái thay vì xóa.`
       });
     }
 
-    await prisma.voucher.delete({
-      where: { id: parseInt(voucherId) }
-    });
+    await Voucher.findByIdAndDelete(voucherId);
 
     res.json({
       success: true,
@@ -497,25 +441,31 @@ const deleteVoucher = async (req, res) => {
 // Get voucher statistics (admin)
 const getVoucherStats = async (req, res) => {
   try {
-    const [total, active, expired, totalUsage] = await Promise.all([
-      prisma.voucher.count(),
-      prisma.voucher.count({ where: { isActive: true } }),
-      prisma.voucher.count({
-        where: {
-          endDate: { lt: new Date() }
-        }
+    const [total, active, expired, totalUsageResult, byType] = await Promise.all([
+      Voucher.countDocuments(),
+      Voucher.countDocuments({ isActive: true }),
+      Voucher.countDocuments({
+        endDate: { $lt: new Date() }
       }),
-      prisma.voucher.aggregate({
-        _sum: {
-          usedCount: true
+      Voucher.aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$usedCount' }
+          }
         }
-      })
+      ]),
+      Voucher.aggregate([
+        {
+          $group: {
+            _id: '$type',
+            count: { $sum: 1 }
+          }
+        }
+      ])
     ]);
 
-    const byType = await prisma.voucher.groupBy({
-      by: ['type'],
-      _count: true
-    });
+    const totalUsage = totalUsageResult.length > 0 ? totalUsageResult[0].total : 0;
 
     res.json({
       success: true,
@@ -523,10 +473,10 @@ const getVoucherStats = async (req, res) => {
         total,
         active,
         expired,
-        totalUsage: totalUsage._sum.usedCount || 0,
+        totalUsage,
         byType: byType.map(item => ({
-          type: item.type,
-          count: item._count
+          type: item._id,
+          count: item.count
         }))
       }
     });

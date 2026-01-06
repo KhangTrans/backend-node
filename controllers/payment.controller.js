@@ -18,9 +18,7 @@ exports.createVNPayPayment = async (req, res) => {
     }
 
     // Verify order exists and belongs to user
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) }
-    });
+    const order = await Order.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -29,7 +27,7 @@ exports.createVNPayPayment = async (req, res) => {
       });
     }
 
-    if (order.userId !== req.user.id && req.user.role !== 'admin') {
+    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền thanh toán đơn hàng này'
@@ -59,12 +57,9 @@ exports.createVNPayPayment = async (req, res) => {
     );
 
     // Save payment info
-    await prisma.order.update({
-      where: { id: parseInt(orderId) },
-      data: {
-        paymentMethod: 'vnpay',
-        paymentStatus: 'pending'
-      }
+    await Order.findByIdAndUpdate(orderId, {
+      paymentMethod: 'vnpay',
+      paymentStatus: 'pending'
     });
 
     res.status(200).json({
@@ -104,9 +99,7 @@ exports.vnpayReturn = async (req, res) => {
     const transactionNo = vnp_Params['vnp_TransactionNo'];
 
     // Find order by orderNumber
-    const order = await prisma.order.findFirst({
-      where: { orderNumber: orderId }
-    });
+    const order = await Order.findOne({ orderNumber: orderId });
 
     if (!order) {
       return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=Order not found`);
@@ -114,27 +107,21 @@ exports.vnpayReturn = async (req, res) => {
 
     if (responseCode === '00') {
       // Payment success
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: 'paid',
-          status: 'confirmed',
-          paidAt: new Date(),
-          transactionId: transactionNo
-        }
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'paid',
+        status: 'confirmed',
+        paidAt: new Date(),
+        transactionId: transactionNo
       });
 
-      return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order.id}&orderNumber=${orderId}`);
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}&orderNumber=${orderId}`);
     } else {
       // Payment failed
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: 'failed'
-        }
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'failed'
       });
 
-      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${order.id}&code=${responseCode}`);
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}&code=${responseCode}`);
     }
   } catch (error) {
     console.error('VNPay return error:', error);
@@ -165,9 +152,7 @@ exports.vnpayIPN = async (req, res) => {
     const responseCode = vnp_Params['vnp_ResponseCode'];
     const amount = vnp_Params['vnp_Amount'] / 100;
 
-    const order = await prisma.order.findFirst({
-      where: { orderNumber: orderId }
-    });
+    const order = await Order.findOne({ orderNumber: orderId });
 
     if (!order) {
       return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
@@ -179,22 +164,16 @@ exports.vnpayIPN = async (req, res) => {
 
     if (responseCode === '00') {
       // Update order
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: 'paid',
-          status: 'confirmed',
-          paidAt: new Date()
-        }
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'paid',
+        status: 'confirmed',
+        paidAt: new Date()
       });
 
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
     } else {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: 'failed'
-        }
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'failed'
       });
 
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
@@ -220,16 +199,7 @@ exports.createZaloPayPayment = async (req, res) => {
     }
 
     // Verify order
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) },
-      include: {
-        items: {
-          include: {
-            product: true
-          }
-        }
-      }
-    });
+    const order = await Order.findById(orderId).populate('items.product');
 
     if (!order) {
       return res.status(404).json({
@@ -238,7 +208,7 @@ exports.createZaloPayPayment = async (req, res) => {
       });
     }
 
-    if (order.userId !== req.user.id && req.user.role !== 'admin') {
+    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền thanh toán đơn hàng này'
@@ -254,7 +224,7 @@ exports.createZaloPayPayment = async (req, res) => {
 
     // Format items for ZaloPay
     const items = order.items.map(item => ({
-      itemid: item.productId.toString(),
+      itemid: item.productId,
       itemname: item.product.name,
       itemprice: parseFloat(item.price),
       itemquantity: item.quantity
@@ -276,13 +246,10 @@ exports.createZaloPayPayment = async (req, res) => {
     }
 
     // Save payment info
-    await prisma.order.update({
-      where: { id: parseInt(orderId) },
-      data: {
-        paymentMethod: 'zalopay',
-        paymentStatus: 'pending',
-        transactionId: result.app_trans_id
-      }
+    await Order.findByIdAndUpdate(orderId, {
+      paymentMethod: 'zalopay',
+      paymentStatus: 'pending',
+      transactionId: result.app_trans_id
     });
 
     res.status(200).json({
@@ -331,9 +298,7 @@ exports.zaloPayCallback = async (req, res) => {
         console.log('ZaloPay callback - Data:', dataJson);
 
         // Update order
-        const order = await prisma.order.findUnique({
-          where: { id: parseInt(orderId) }
-        });
+        const order = await Order.findById(orderId);
 
         if (!order) {
           result.return_code = -1;
@@ -342,14 +307,11 @@ exports.zaloPayCallback = async (req, res) => {
           result.return_code = 1;
           result.return_message = 'Order already confirmed';
         } else {
-          await prisma.order.update({
-            where: { id: parseInt(orderId) },
-            data: {
-              paymentStatus: 'paid',
-              status: 'confirmed',
-              paidAt: new Date(),
-              transactionId: dataJson.app_trans_id
-            }
+          await Order.findByIdAndUpdate(orderId, {
+            paymentStatus: 'paid',
+            status: 'confirmed',
+            paidAt: new Date(),
+            transactionId: dataJson.app_trans_id
           });
 
           result.return_code = 1;
@@ -376,9 +338,7 @@ exports.getPaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) }
-    });
+    const order = await Order.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -387,7 +347,7 @@ exports.getPaymentStatus = async (req, res) => {
       });
     }
 
-    if (order.userId !== req.user.id && req.user.role !== 'admin') {
+    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền xem đơn hàng này'

@@ -19,15 +19,11 @@ exports.getNotifications = async (req, res) => {
     }
 
     const [notifications, total] = await Promise.all([
-      prisma.notification.findMany({
-        where,
-        orderBy: {
-          createdAt: 'desc',
-        },
-        skip,
-        take: parseInt(limit),
-      }),
-      prisma.notification.count({ where }),
+      Notification.find(where)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Notification.countDocuments(where),
     ]);
 
     res.json({
@@ -55,11 +51,9 @@ exports.getNotifications = async (req, res) => {
 // @access  Private
 exports.getUnreadCount = async (req, res) => {
   try {
-    const count = await prisma.notification.count({
-      where: {
-        userId: req.user.id,
-        isRead: false,
-      },
+    const count = await Notification.countDocuments({
+      userId: req.user.id,
+      isRead: false,
     });
 
     res.json({
@@ -83,9 +77,7 @@ exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const notification = await prisma.notification.findUnique({
-      where: { id: parseInt(id) },
-    });
+    const notification = await Notification.findById(id);
 
     if (!notification) {
       return res.status(404).json({
@@ -95,17 +87,18 @@ exports.markAsRead = async (req, res) => {
     }
 
     // Check if notification belongs to user
-    if (notification.userId !== req.user.id) {
+    if (notification.userId.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền truy cập thông báo này',
       });
     }
 
-    const updatedNotification = await prisma.notification.update({
-      where: { id: parseInt(id) },
-      data: { isRead: true },
-    });
+    const updatedNotification = await Notification.findByIdAndUpdate(
+      id,
+      { isRead: true },
+      { new: true }
+    );
 
     res.json({
       success: true,
@@ -127,15 +120,15 @@ exports.markAsRead = async (req, res) => {
 // @access  Private
 exports.markAllAsRead = async (req, res) => {
   try {
-    await prisma.notification.updateMany({
-      where: {
+    await Notification.updateMany(
+      {
         userId: req.user.id,
         isRead: false,
       },
-      data: {
+      {
         isRead: true,
-      },
-    });
+      }
+    );
 
     res.json({
       success: true,
@@ -158,9 +151,7 @@ exports.deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const notification = await prisma.notification.findUnique({
-      where: { id: parseInt(id) },
-    });
+    const notification = await Notification.findById(id);
 
     if (!notification) {
       return res.status(404).json({
@@ -170,16 +161,14 @@ exports.deleteNotification = async (req, res) => {
     }
 
     // Check if notification belongs to user
-    if (notification.userId !== req.user.id) {
+    if (notification.userId.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền xóa thông báo này',
       });
     }
 
-    await prisma.notification.delete({
-      where: { id: parseInt(id) },
-    });
+    await Notification.findByIdAndDelete(id);
 
     res.json({
       success: true,
@@ -200,11 +189,9 @@ exports.deleteNotification = async (req, res) => {
 // @access  Private
 exports.clearReadNotifications = async (req, res) => {
   try {
-    await prisma.notification.deleteMany({
-      where: {
-        userId: req.user.id,
-        isRead: true,
-      },
+    await Notification.deleteMany({
+      userId: req.user.id,
+      isRead: true,
     });
 
     res.json({

@@ -10,38 +10,24 @@ exports.getConversation = async (req, res) => {
     const { page = 1, limit = 50 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const otherUserId = parseInt(userId);
-
     // Lấy tin nhắn giữa 2 users
     const [messages, total] = await Promise.all([
-      prisma.message.findMany({
-        where: {
-          OR: [
-            { senderId: req.user.id, receiverId: otherUserId },
-            { senderId: otherUserId, receiverId: req.user.id },
-          ],
-        },
-        include: {
-          sender: {
-            select: { id: true, username: true, fullName: true, role: true },
-          },
-          receiver: {
-            select: { id: true, username: true, fullName: true, role: true },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        skip,
-        take: parseInt(limit),
-      }),
-      prisma.message.count({
-        where: {
-          OR: [
-            { senderId: req.user.id, receiverId: otherUserId },
-            { senderId: otherUserId, receiverId: req.user.id },
-          ],
-        },
+      Message.find({
+        $or: [
+          { senderId: req.user.id, receiverId: userId },
+          { senderId: userId, receiverId: req.user.id },
+        ],
+      })
+        .populate('sender', 'id username fullName role')
+        .populate('receiver', 'id username fullName role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Message.countDocuments({
+        $or: [
+          { senderId: req.user.id, receiverId: userId },
+          { senderId: userId, receiverId: req.user.id },
+        ],
       }),
     ]);
 
@@ -74,50 +60,46 @@ exports.getConversation = async (req, res) => {
 exports.getConversations = async (req, res) => {
   try {
     // Lấy danh sách users đã chat với current user
-    const conversations = await prisma.$queryRaw`
-      SELECT DISTINCT
-        CASE 
-          WHEN senderId = ${req.user.id} THEN receiverId
-          ELSE senderId
-        END as userId,
-        MAX(createdAt) as lastMessageAt
-      FROM messages
-      WHERE senderId = ${req.user.id} OR receiverId = ${req.user.id}
-      GROUP BY userId
-      ORDER BY lastMessageAt DESC
-    `;
+    const conversations = await Message.aggregate([
+      {
+        $match: {
+          $or: [
+            { senderId: req.user.id },
+            { receiverId: req.user.id }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $cond: {
+              if: { $eq: ['$senderId', req.user.id] },
+              then: '$receiverId',
+              else: '$senderId'
+            }
+          },
+          lastMessageAt: { $max: '$createdAt' }
+        }
+      },
+      { $sort: { lastMessageAt: -1 } }
+    ]);
 
     // Lấy thông tin user và tin nhắn cuối cùng cho mỗi conversation
     const conversationsWithDetails = await Promise.all(
       conversations.map(async (conv) => {
-        const user = await prisma.user.findUnique({
-          where: { id: conv.userId },
-          select: {
-            id: true,
-            username: true,
-            fullName: true,
-            role: true,
-          },
-        });
+        const user = await User.findById(conv._id).select('id username fullName role');
 
-        const lastMessage = await prisma.message.findFirst({
-          where: {
-            OR: [
-              { senderId: req.user.id, receiverId: conv.userId },
-              { senderId: conv.userId, receiverId: req.user.id },
-            ],
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        });
+        const lastMessage = await Message.findOne({
+          $or: [
+            { senderId: req.user.id, receiverId: conv._id },
+            { senderId: conv._id, receiverId: req.user.id },
+          ],
+        }).sort({ createdAt: -1 });
 
-        const unreadCount = await prisma.message.count({
-          where: {
-            senderId: conv.userId,
-            receiverId: req.user.id,
-            isRead: false,
-          },
+        const unreadCount = await Message.countDocuments({
+          senderId: conv._id,
+          receiverId: req.user.id,
+          isRead: false,
         });
 
         return {
@@ -158,9 +140,7 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Check if receiver exists
-    const receiver = await prisma.user.findUnique({
-      where: { id: parseInt(receiverId) },
-    });
+    const receiver = await User.findById(receiverId);
 
     if (!receiver) {
       return res.status(404).json({
@@ -169,21 +149,14 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    const newMessage = await prisma.message.create({
-      data: {
-        senderId: req.user.id,
-        receiverId: parseInt(receiverId),
-        message: message.trim(),
-      },
-      include: {
-        sender: {
-          select: { id: true, username: true, fullName: true, role: true },
-        },
-        receiver: {
-          select: { id: true, username: true, fullName: true, role: true },
-        },
-      },
+    const newMessage = await Message.create({
+      senderId: req.user.id,
+      receiverId: receiverId,
+      message: message.trim(),
     });
+
+    await newMessage.populate('sender', 'id username fullName role');
+    await newMessage.populate('receiver', 'id username fullName role');
 
     // Note: Real-time sending is handled by Socket.IO in config/socket.js
     // This endpoint is a fallback for non-socket clients
@@ -210,16 +183,16 @@ exports.markMessagesAsRead = async (req, res) => {
   try {
     const { senderId } = req.params;
 
-    await prisma.message.updateMany({
-      where: {
-        senderId: parseInt(senderId),
+    await Message.updateMany(
+      {
+        senderId: senderId,
         receiverId: req.user.id,
         isRead: false,
       },
-      data: {
+      {
         isRead: true,
-      },
-    });
+      }
+    );
 
     res.json({
       success: true,
@@ -240,11 +213,9 @@ exports.markMessagesAsRead = async (req, res) => {
 // @access  Private
 exports.getUnreadCount = async (req, res) => {
   try {
-    const count = await prisma.message.count({
-      where: {
-        receiverId: req.user.id,
-        isRead: false,
-      },
+    const count = await Message.countDocuments({
+      receiverId: req.user.id,
+      isRead: false,
     });
 
     res.json({
@@ -270,38 +241,20 @@ exports.getChatUsers = async (req, res) => {
 
     if (req.user.role === 'admin') {
       // Admin có thể chat với tất cả users
-      users = await prisma.user.findMany({
-        where: {
-          id: { not: req.user.id },
-          isActive: true,
-        },
-        select: {
-          id: true,
-          username: true,
-          fullName: true,
-          role: true,
-        },
-        orderBy: {
-          username: 'asc',
-        },
-      });
+      users = await User.find({
+        _id: { $ne: req.user.id },
+        isActive: true,
+      })
+        .select('id username fullName role')
+        .sort({ username: 1 });
     } else {
       // User chỉ chat với admin
-      users = await prisma.user.findMany({
-        where: {
-          role: 'admin',
-          isActive: true,
-        },
-        select: {
-          id: true,
-          username: true,
-          fullName: true,
-          role: true,
-        },
-        orderBy: {
-          username: 'asc',
-        },
-      });
+      users = await User.find({
+        role: 'admin',
+        isActive: true,
+      })
+        .select('id username fullName role')
+        .sort({ username: 1 });
     }
 
     res.json({
