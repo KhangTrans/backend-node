@@ -47,7 +47,7 @@ const createOrder = async (req, res) => {
     // Get user's cart
     const cart = await Cart.findOne({ userId })
       .populate({
-        path: 'items.product',
+        path: 'items.productId',
         populate: {
           path: 'images',
           match: { isPrimary: true }
@@ -63,16 +63,16 @@ const createOrder = async (req, res) => {
 
     // Validate stock for all items
     for (const item of cart.items) {
-      if (item.product.stock < item.quantity) {
+      if (item.productId.stock < item.quantity) {
         return res.status(400).json({
           success: false,
-          message: `Sản phẩm "${item.product.name}" chỉ còn ${item.product.stock} trong kho`
+          message: `Sản phẩm "${item.productId.name}" chỉ còn ${item.productId.stock} trong kho`
         });
       }
-      if (!item.product.isActive) {
+      if (!item.productId.isActive) {
         return res.status(400).json({
           success: false,
-          message: `Sản phẩm "${item.product.name}" không còn khả dụng`
+          message: `Sản phẩm "${item.productId.name}" không còn khả dụng`
         });
       }
     }
@@ -178,9 +178,9 @@ const createOrder = async (req, res) => {
       total,
       voucherId,
       items: cart.items.map(item => ({
-        product: item.product._id,
-        productName: item.product.name,
-        productImage: item.product.images[0]?.imageUrl || null,
+        productId: item.productId._id,
+        productName: item.productId.name,
+        productImage: item.productId.images[0]?.imageUrl || null,
         price: item.price,
         quantity: item.quantity,
         subtotal: parseFloat(item.price) * item.quantity
@@ -190,7 +190,7 @@ const createOrder = async (req, res) => {
     // Update product stock
     for (const item of cart.items) {
       await Product.findByIdAndUpdate(
-        item.product._id,
+        item.productId._id,
         { $inc: { stock: -item.quantity } }
       );
     }
@@ -210,10 +210,10 @@ const createOrder = async (req, res) => {
     // Populate order
     await order.populate([
       {
-        path: 'items.product'
+        path: 'items.productId'
       },
       {
-        path: 'voucher'
+        path: 'voucherId'
       }
     ]);
 
@@ -260,8 +260,8 @@ const getMyOrders = async (req, res) => {
 
     const [orders, total] = await Promise.all([
       Order.find(filter)
-        .populate('items.product')
-        .populate('voucher')
+        .populate('items.productId')
+        .populate('voucherId')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -296,17 +296,17 @@ const getOrderById = async (req, res) => {
 
     const order = await Order.findById(orderId)
       .populate({
-        path: 'items.product',
+        path: 'items.productId',
         populate: {
           path: 'images',
           match: { isPrimary: true }
         }
       })
       .populate({
-        path: 'user',
+        path: 'userId',
         select: '_id username email fullName'
       })
-      .populate('voucher');
+      .populate('voucherId');
 
     if (!order) {
       return res.status(404).json({
@@ -344,7 +344,7 @@ const cancelOrder = async (req, res) => {
     const { orderId } = req.params;
     const { reason } = req.body;
 
-    const order = await Order.findById(orderId).populate('items.product');
+    const order = await Order.findById(orderId).populate('items.productId');
 
     if (!order) {
       return res.status(404).json({
@@ -420,12 +420,12 @@ const getAllOrders = async (req, res) => {
 
     const [orders, total] = await Promise.all([
       Order.find(filter)
-        .populate('items.product')
+        .populate('items.productId')
         .populate({
-          path: 'user',
+          path: 'userId',
           select: '_id username email'
         })
-        .populate('voucher')
+        .populate('voucherId')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -489,9 +489,9 @@ const updateOrderStatus = async (req, res) => {
 
     // Populate order
     const updatedOrder = await Order.findById(orderId)
-      .populate('items.product')
+      .populate('items.productId')
       .populate({
-        path: 'user',
+        path: 'userId',
         select: '_id username email'
       });
 
