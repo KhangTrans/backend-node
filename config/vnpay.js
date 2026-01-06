@@ -24,18 +24,13 @@ const vnpayConfig = {
  * Sắp xếp object theo key
  */
 function sortObject(obj) {
-  let sorted = {};
-  let str = [];
-  let key;
-  for (key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      str.push(encodeURIComponent(key));
-    }
+  const sorted = {};
+  const keys = Object.keys(obj).sort();
+  
+  for (const key of keys) {
+    sorted[key] = obj[key];
   }
-  str.sort();
-  for (key = 0; key < str.length; key++) {
-    sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, "+");
-  }
+  
   return sorted;
 }
 
