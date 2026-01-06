@@ -7,13 +7,7 @@ const getCart = async (req, res) => {
     const userId = req.user.id;
 
     let cart = await Cart.findOne({ userId })
-      .populate({
-        path: 'items.product',
-        populate: {
-          path: 'images',
-          match: { isPrimary: true }
-        }
-      });
+      .populate('items.productId');
 
     // Create cart if it doesn't exist
     if (!cart) {
@@ -104,7 +98,7 @@ const addToCart = async (req, res) => {
 
     // Check if item already exists in cart
     const existingItemIndex = cart.items.findIndex(
-      item => item.product.toString() === productId
+      item => item.productId.toString() === productId
     );
 
     let updatedCart;
@@ -124,35 +118,23 @@ const addToCart = async (req, res) => {
       await cart.save();
 
       updatedCart = await Cart.findOne({ userId })
-        .populate({
-          path: 'items.product',
-          populate: {
-            path: 'images',
-            match: { isPrimary: true }
-          }
-        });
+        .populate('items.productId');
     } else {
       // Create new cart item
       cart.items.push({
-        product: productId,
+        productId: productId,
         quantity: quantity,
         price: product.price
       });
       await cart.save();
 
       updatedCart = await Cart.findOne({ userId })
-        .populate({
-          path: 'items.product',
-          populate: {
-            path: 'images',
-            match: { isPrimary: true }
-          }
-        });
+        .populate('items.productId');
     }
 
     // Get the added item
     const addedItem = updatedCart.items.find(
-      item => item.product._id.toString() === productId
+      item => item.productId._id.toString() === productId
     );
 
     res.status(201).json({
@@ -229,13 +211,7 @@ const updateCartItem = async (req, res) => {
 
     // Populate and return
     const updatedCart = await Cart.findOne({ userId })
-      .populate({
-        path: 'items.product',
-        populate: {
-          path: 'images',
-          match: { isPrimary: true }
-        }
-      });
+      .populate('items.productId');
 
     const updatedItem = updatedCart.items.id(itemId);
 
