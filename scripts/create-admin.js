@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+const User = require('../models/User.model');
 const bcrypt = require('bcryptjs');
 
 async function createAdminUser() {
@@ -70,3 +70,4 @@ if (require.main === module) {
 }
 
 module.exports = { createAdminUser };
+

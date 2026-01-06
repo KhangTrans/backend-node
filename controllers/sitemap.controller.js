@@ -1,4 +1,5 @@
-const prisma = require('../lib/prisma');
+const Product = require('../models/Product.model');
+const Category = require('../models/Category.model');
 
 // @desc    Generate XML sitemap for SEO
 // @route   GET /api/sitemap.xml

@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+const Product = require('../models/Product.model');
 const { validationResult } = require('express-validator');
 const { generateUniqueSlug } = require('../utils/slug');
 
@@ -33,57 +33,49 @@ exports.createProduct = async (req, res) => {
 
     // Generate unique slug
     const slug = customSlug 
-      ? await generateUniqueSlug(customSlug, null, prisma)
-      : await generateUniqueSlug(name, null, prisma);
+      ? await generateUniqueSlug(customSlug, null, Product)
+      : await generateUniqueSlug(name, null, Product);
 
-    // Create product with images and variants
-    const product = await prisma.product.create({
-      data: {
-        name,
-        slug,
-        description,
-        price: parseFloat(price),
-        stock: parseInt(stock) || 0,
-        categoryId: categoryId ? parseInt(categoryId) : null,
-        metaTitle: metaTitle || name,
-        metaDescription: metaDescription || description?.substring(0, 160),
-        metaKeywords,
-        canonicalUrl,
-        createdBy: req.user.id,
-        images: images && images.length > 0 ? {
-          create: images.map((img, index) => ({
-            imageUrl: img.imageUrl || img,
-            isPrimary: img.isPrimary || index === 0,
-            order: img.order || index
-          }))
-        } : undefined,
-        variants: variants && variants.length > 0 ? {
-          create: variants.map(v => ({
-            name: v.name,
-            sku: v.sku,
-            price: v.price ? parseFloat(v.price) : null,
-            stock: parseInt(v.stock) || 0,
-            color: v.color,
-            size: v.size,
-            material: v.material
-          }))
-        } : undefined
+    // Prepare product data
+    const productData = {
+      name,
+      slug,
+      description,
+      price: parseFloat(price),
+      stock: parseInt(stock) || 0,
+      categoryId: categoryId || null,
+      metaTitle: metaTitle || name,
+      metaDescription: metaDescription || description?.substring(0, 160),
+      metaKeywords,
+      canonicalUrl,
+      createdBy: req.user.id,
+      images: images && images.length > 0 ? images.map((img, index) => ({
+        imageUrl: img.imageUrl || img,
+        isPrimary: img.isPrimary || index === 0,
+        order: img.order || index
+      })) : [],
+      variants: variants && variants.length > 0 ? variants.map(v => ({
+        name: v.name,
+        sku: v.sku,
+        price: v.price ? parseFloat(v.price) : null,
+        stock: parseInt(v.stock) || 0,
+        color: v.color,
+        size: v.size,
+        material: v.material
+      })) : []
+    };
+
+    // Create product
+    const product = await Product.create(productData);
+
+    // Populate relations
+    await product.populate([
+      {
+        path: 'user',
+        select: '_id username email'
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
-        },
-        category: true,
-        images: {
-          orderBy: { order: 'asc' }
-        },
-        variants: true
-      }
-    });
+      { path: 'category' }
+    ]);
 
     res.status(201).json({
       success: true,
@@ -110,46 +102,33 @@ exports.getAllProducts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     // Build filter
-    const where = {
+    const filter = {
       isActive: true
     };
     
     if (categoryId) {
-      where.categoryId = parseInt(categoryId);
+      filter.categoryId = categoryId;
     }
     
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } }
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
       ];
     }
 
     // Get products with pagination
     const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        skip,
-        take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              fullName: true
-            }
-          },
-          category: true,
-          images: {
-            orderBy: { order: 'asc' }
-          },
-          variants: {
-            where: { isActive: true }
-          }
-        }
-      }),
-      prisma.product.count({ where })
+      Product.find(filter)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .sort({ createdAt: -1 })
+        .populate({
+          path: 'user',
+          select: '_id username fullName'
+        })
+        .populate('category'),
+      Product.countDocuments(filter)
     ]);
 
     res.status(200).json({
@@ -177,26 +156,12 @@ exports.getProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            fullName: true,
-            email: true
-          }
-        },
-        category: true,
-        images: {
-          orderBy: { order: 'asc' }
-        },
-        variants: {
-          orderBy: { createdAt: 'asc' }
-        }
-      }
-    });
+    const product = await Product.findById(id)
+      .populate({
+        path: 'user',
+        select: '_id username fullName email'
+      })
+      .populate('category');
 
     if (!product) {
       return res.status(404).json({
@@ -226,26 +191,12 @@ exports.getProductBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const product = await prisma.product.findUnique({
-      where: { slug },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            fullName: true,
-            email: true
-          }
-        },
-        category: true,
-        images: {
-          orderBy: { order: 'asc' }
-        },
-        variants: {
-          orderBy: { createdAt: 'asc' }
-        }
-      }
-    });
+    const product = await Product.findOne({ slug })
+      .populate({
+        path: 'user',
+        select: '_id username fullName email'
+      })
+      .populate('category');
 
     if (!product) {
       return res.status(404).json({
@@ -291,13 +242,7 @@ exports.updateProduct = async (req, res) => {
     } = req.body;
 
     // Check if product exists
-    const existingProduct = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        images: true,
-        variants: true
-      }
-    });
+    const existingProduct = await Product.findById(id);
 
     if (!existingProduct) {
       return res.status(404).json({
@@ -319,87 +264,66 @@ exports.updateProduct = async (req, res) => {
     if (customSlug || (name && name !== existingProduct.name)) {
       newSlug = await generateUniqueSlug(
         customSlug || name, 
-        parseInt(id), 
-        prisma
+        id, 
+        Product
       );
     }
 
     // Prepare update data
-    const updateData = {
-      name,
-      slug: newSlug,
-      description,
-      price: price ? parseFloat(price) : undefined,
-      stock: stock !== undefined ? parseInt(stock) : undefined,
-      categoryId: categoryId ? parseInt(categoryId) : undefined,
-      metaTitle: metaTitle || (name ? name : undefined),
-      metaDescription,
-      metaKeywords,
-      canonicalUrl,
-      isActive
-    };
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (newSlug) updateData.slug = newSlug;
+    if (description !== undefined) updateData.description = description;
+    if (price) updateData.price = parseFloat(price);
+    if (stock !== undefined) updateData.stock = parseInt(stock);
+    if (categoryId !== undefined) updateData.categoryId = categoryId || null;
+    if (metaTitle || name) updateData.metaTitle = metaTitle || name;
+    if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
+    if (metaKeywords !== undefined) updateData.metaKeywords = metaKeywords;
+    if (canonicalUrl !== undefined) updateData.canonicalUrl = canonicalUrl;
+    if (isActive !== undefined) updateData.isActive = isActive;
 
     // Handle images update if provided
     if (images !== undefined) {
-      // Delete existing images
-      await prisma.productImage.deleteMany({
-        where: { productId: parseInt(id) }
-      });
-
-      // Add new images if provided
       if (images && images.length > 0) {
-        updateData.images = {
-          create: images.map((img, index) => ({
-            imageUrl: img.imageUrl || img,
-            isPrimary: img.isPrimary || index === 0,
-            order: img.order !== undefined ? img.order : index
-          }))
-        };
+        updateData.images = images.map((img, index) => ({
+          imageUrl: img.imageUrl || img,
+          isPrimary: img.isPrimary || index === 0,
+          order: img.order !== undefined ? img.order : index
+        }));
+      } else {
+        updateData.images = [];
       }
     }
 
     // Handle variants update if provided
     if (variants !== undefined) {
-      // Delete existing variants
-      await prisma.productVariant.deleteMany({
-        where: { productId: parseInt(id) }
-      });
-
-      // Add new variants if provided
       if (variants && variants.length > 0) {
-        updateData.variants = {
-          create: variants.map(v => ({
-            name: v.name,
-            sku: v.sku,
-            price: v.price ? parseFloat(v.price) : null,
-            stock: parseInt(v.stock) || 0,
-            color: v.color,
-            size: v.size,
-            material: v.material
-          }))
-        };
+        updateData.variants = variants.map(v => ({
+          name: v.name,
+          sku: v.sku,
+          price: v.price ? parseFloat(v.price) : null,
+          stock: parseInt(v.stock) || 0,
+          color: v.color,
+          size: v.size,
+          material: v.material
+        }));
+      } else {
+        updateData.variants = [];
       }
     }
 
     // Update product
-    const product = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            fullName: true
-          }
-        },
-        category: true,
-        images: {
-          orderBy: { order: 'asc' }
-        },
-        variants: true
-      }
-    });
+    const product = await Product.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    )
+      .populate({
+        path: 'user',
+        select: '_id username fullName'
+      })
+      .populate('category');
 
     res.status(200).json({
       success: true,
@@ -424,9 +348,7 @@ exports.deleteProduct = async (req, res) => {
     const { id } = req.params;
 
     // Check if product exists
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) }
-    });
+    const product = await Product.findById(id);
 
     if (!product) {
       return res.status(404).json({
@@ -436,7 +358,7 @@ exports.deleteProduct = async (req, res) => {
     }
 
     // Check if user owns the product or is admin
-    if (product.createdBy !== req.user.id && req.user.role !== 'admin') {
+    if (product.createdBy.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete this product'
@@ -444,9 +366,7 @@ exports.deleteProduct = async (req, res) => {
     }
 
     // Delete product
-    await prisma.product.delete({
-      where: { id: parseInt(id) }
-    });
+    await Product.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,

@@ -1,4 +1,5 @@
-const prisma = require('../lib/prisma');
+const Message = require('../models/Message.model');
+const User = require('../models/User.model');
 
 // @desc    Get conversation with another user
 // @route   GET /api/messages/conversation/:userId

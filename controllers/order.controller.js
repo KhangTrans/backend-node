@@ -1,4 +1,7 @@
-const prisma = require('../lib/prisma');
+const Order = require('../models/Order.model');
+const Cart = require('../models/Cart.model');
+const Product = require('../models/Product.model');
+const Voucher = require('../models/Voucher.model');
 const { notifyAdmin, notifyUser } = require('../config/socket');
 
 // Helper function to format price
@@ -42,23 +45,14 @@ const createOrder = async (req, res) => {
     }
 
     // Get user's cart
-    const cart = await prisma.cart.findUnique({
-      where: { userId },
-      include: {
-        items: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  where: { isPrimary: true },
-                  take: 1
-                }
-              }
-            }
-          }
+    const cart = await Cart.findOne({ userId })
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'images',
+          match: { isPrimary: true }
         }
-      }
-    });
+      });
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
@@ -95,9 +89,7 @@ const createOrder = async (req, res) => {
 
     // Apply voucher if provided
     if (voucherCode) {
-      const voucher = await prisma.voucher.findUnique({
-        where: { code: voucherCode.toUpperCase() }
-      });
+      const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
 
       if (!voucher) {
         return res.status(400).json({
@@ -129,7 +121,7 @@ const createOrder = async (req, res) => {
         });
       }
 
-      if (voucher.userId !== null && voucher.userId !== userId) {
+      if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) {
         return res.status(403).json({
           success: false,
           message: 'Voucher này không dành cho bạn'
@@ -144,7 +136,7 @@ const createOrder = async (req, res) => {
       }
 
       // Apply voucher discount
-      voucherId = voucher.id;
+      voucherId = voucher._id;
       
       if (voucher.type === 'DISCOUNT') {
         discount = (subtotal * voucher.discountPercent) / 100;
@@ -163,85 +155,67 @@ const createOrder = async (req, res) => {
     let isUnique = false;
     while (!isUnique) {
       orderNumber = generateOrderNumber();
-      const existing = await prisma.order.findUnique({
-        where: { orderNumber }
-      });
+      const existing = await Order.findOne({ orderNumber });
       if (!existing) isUnique = true;
     }
 
-    // Create order with transaction
-    const order = await prisma.$transaction(async (tx) => {
-      // Create order
-      const newOrder = await tx.order.create({
-        data: {
-          orderNumber,
-          userId,
-          customerName,
-          customerEmail,
-          customerPhone,
-          shippingAddress,
-          shippingCity,
-          shippingDistrict,
-          shippingWard,
-          shippingNote,
-          paymentMethod,
-          subtotal,
-          shippingFee,
-          discount,
-          total,
-          voucherId,
-          items: {
-            create: cart.items.map(item => ({
-              productId: item.productId,
-              productName: item.product.name,
-              productImage: item.product.images[0]?.imageUrl || null,
-              price: item.price,
-              quantity: item.quantity,
-              subtotal: parseFloat(item.price) * item.quantity
-            }))
-          }
-        },
-        include: {
-          items: {
-            include: {
-              product: true
-            }
-          },
-          voucher: true
-        }
-      });
-
-      // Update product stock
-      for (const item of cart.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stock: {
-              decrement: item.quantity
-            }
-          }
-        });
-      }
-
-      // Update voucher usage count
-      if (voucherId) {
-        await tx.voucher.update({
-          where: { id: voucherId },
-          data: {
-            usedCount: {
-              increment: 1
-            }
-          }
-        });
-      }
-
-      // Clear cart
-      await tx.cartItem.deleteMany({
-        where: { cartId: cart.id }
-      });
-
-      return newOrder;
+    // Create order
+    const order = await Order.create({
+      orderNumber,
+      userId,
+      customerName,
+      customerEmail,
+      customerPhone,
+      shippingAddress,
+      shippingCity,
+      shippingDistrict,
+      shippingWard,
+      shippingNote,
+      paymentMethod,
+      subtotal,
+      shippingFee,
+      discount,
+      total,
+      voucherId,
+      items: cart.items.map(item => ({
+        product: item.product._id,
+        productName: item.product.name,
+        productImage: item.product.images[0]?.imageUrl || null,
+        price: item.price,
+        quantity: item.quantity,
+        subtotal: parseFloat(item.price) * item.quantity
+      }))
     });
+
+    // Update product stock
+    for (const item of cart.items) {
+      await Product.findByIdAndUpdate(
+        item.product._id,
+        { $inc: { stock: -item.quantity } }
+      );
+    }
+
+    // Update voucher usage count
+    if (voucherId) {
+      await Voucher.findByIdAndUpdate(
+        voucherId,
+        { $inc: { usedCount: 1 } }
+      );
+    }
+
+    // Clear cart
+    cart.items = [];
+    await cart.save();
+
+    // Populate order
+    await order.populate([
+      {
+        path: 'items.product'
+      },
+      {
+        path: 'voucher'
+      }
+    ]);
 
     // Notify admin about new order (real-time)
     try {
@@ -249,7 +223,7 @@ const createOrder = async (req, res) => {
         'ORDER_CREATED',
         'Đơn hàng mới',
         `Đơn hàng ${order.orderNumber} từ ${customerName} (${formatPrice(order.total)})`,
-        order.id
+        order._id.toString()
       );
     } catch (notifyError) {
       console.error('Error notifying admin:', notifyError);
@@ -279,27 +253,19 @@ const getMyOrders = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = { userId };
+    const filter = { userId };
     if (status) {
-      where.orderStatus = status;
+      filter.orderStatus = status;
     }
 
     const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        include: {
-          items: {
-            include: {
-              product: true
-            }
-          },
-          voucher: true
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.order.count({ where })
+      Order.find(filter)
+        .populate('items.product')
+        .populate('voucher')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Order.countDocuments(filter)
     ]);
 
     res.json({
@@ -328,32 +294,19 @@ const getOrderById = async (req, res) => {
     const userId = req.user.id;
     const { orderId } = req.params;
 
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) },
-      include: {
-        items: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  where: { isPrimary: true },
-                  take: 1
-                }
-              }
-            }
-          }
-        },
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            fullName: true
-          }
-        },
-        voucher: true
-      }
-    });
+    const order = await Order.findById(orderId)
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'images',
+          match: { isPrimary: true }
+        }
+      })
+      .populate({
+        path: 'user',
+        select: '_id username email fullName'
+      })
+      .populate('voucher');
 
     if (!order) {
       return res.status(404).json({
@@ -363,7 +316,7 @@ const getOrderById = async (req, res) => {
     }
 
     // Check permission (user can only view their own orders, admin can view all)
-    if (order.userId !== userId && req.user.role !== 'admin') {
+    if (order.userId.toString() !== userId.toString() && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Không có quyền truy cập đơn hàng này'
@@ -391,12 +344,7 @@ const cancelOrder = async (req, res) => {
     const { orderId } = req.params;
     const { reason } = req.body;
 
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) },
-      include: {
-        items: true
-      }
-    });
+    const order = await Order.findById(orderId).populate('items.product');
 
     if (!order) {
       return res.status(404).json({
@@ -406,7 +354,7 @@ const cancelOrder = async (req, res) => {
     }
 
     // Check permission
-    if (order.userId !== userId) {
+    if (order.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Không có quyền hủy đơn hàng này'
@@ -422,39 +370,23 @@ const cancelOrder = async (req, res) => {
     }
 
     // Cancel order and restore stock
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Update order status
-      const cancelled = await tx.order.update({
-        where: { id: parseInt(orderId) },
-        data: {
-          orderStatus: 'cancelled',
-          cancelledAt: new Date(),
-          cancellationReason: reason || 'Khách hàng hủy đơn'
-        },
-        include: {
-          items: true
-        }
-      });
+    order.orderStatus = 'cancelled';
+    order.cancelledAt = new Date();
+    order.cancellationReason = reason || 'Khách hàng hủy đơn';
+    await order.save();
 
-      // Restore product stock
-      for (const item of order.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stock: {
-              increment: item.quantity
-            }
-          }
-        });
-      }
-
-      return cancelled;
-    });
+    // Restore product stock
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(
+        item.product,
+        { $inc: { stock: item.quantity } }
+      );
+    }
 
     res.json({
       success: true,
       message: 'Đã hủy đơn hàng',
-      data: updatedOrder
+      data: order
     });
   } catch (error) {
     console.error('Cancel order error:', error);
@@ -473,42 +405,31 @@ const getAllOrders = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    const filter = {};
     if (status) {
-      where.orderStatus = status;
+      filter.orderStatus = status;
     }
     if (search) {
-      where.OR = [
-        { orderNumber: { contains: search } },
-        { customerName: { contains: search } },
-        { customerEmail: { contains: search } },
-        { customerPhone: { contains: search } }
+      filter.$or = [
+        { orderNumber: { $regex: search, $options: 'i' } },
+        { customerName: { $regex: search, $options: 'i' } },
+        { customerEmail: { $regex: search, $options: 'i' } },
+        { customerPhone: { $regex: search, $options: 'i' } }
       ];
     }
 
     const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        include: {
-          items: {
-            include: {
-              product: true
-            }
-          },
-          user: {
-            select: {
-              id: true,
-              username: true,
-              email: true
-            }
-          },
-          voucher: true
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.order.count({ where })
+      Order.find(filter)
+        .populate('items.product')
+        .populate({
+          path: 'user',
+          select: '_id username email'
+        })
+        .populate('voucher')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Order.countDocuments(filter)
     ]);
 
     res.json({
@@ -537,9 +458,7 @@ const updateOrderStatus = async (req, res) => {
     const { orderId } = req.params;
     const { orderStatus, paymentStatus } = req.body;
 
-    const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) }
-    });
+    const order = await Order.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -548,36 +467,33 @@ const updateOrderStatus = async (req, res) => {
       });
     }
 
-    const updateData = {};
-    
     if (orderStatus) {
-      updateData.orderStatus = orderStatus;
+      order.orderStatus = orderStatus;
       
       // Update tracking timestamps
       if (orderStatus === 'shipping' && !order.shippedAt) {
-        updateData.shippedAt = new Date();
+        order.shippedAt = new Date();
       } else if (orderStatus === 'delivered' && !order.deliveredAt) {
-        updateData.deliveredAt = new Date();
+        order.deliveredAt = new Date();
       }
     }
 
     if (paymentStatus) {
-      updateData.paymentStatus = paymentStatus;
+      order.paymentStatus = paymentStatus;
       if (paymentStatus === 'paid' && !order.paidAt) {
-        updateData.paidAt = new Date();
+        order.paidAt = new Date();
       }
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id: parseInt(orderId) },
-      data: updateData,
-      include: {
-        items: true,
-        user: {
-          select: { id: true, username: true, email: true }
-        }
-      }
-    });
+    await order.save();
+
+    // Populate order
+    const updatedOrder = await Order.findById(orderId)
+      .populate('items.product')
+      .populate({
+        path: 'user',
+        select: '_id username email'
+      });
 
     // Send notification to user about order status change
     try {
@@ -624,7 +540,7 @@ const updateOrderStatus = async (req, res) => {
           paymentStatus === 'paid' ? 'PAYMENT_CONFIRMED' : 'SYSTEM',
           notificationTitle,
           notificationMessage,
-          updatedOrder.id
+          updatedOrder._id.toString()
         );
       }
     } catch (notifyError) {
@@ -659,16 +575,16 @@ const getOrderStatistics = async (req, res) => {
       cancelledOrders,
       totalRevenue
     ] = await Promise.all([
-      prisma.order.count(),
-      prisma.order.count({ where: { orderStatus: 'pending' } }),
-      prisma.order.count({ where: { orderStatus: 'processing' } }),
-      prisma.order.count({ where: { orderStatus: 'shipping' } }),
-      prisma.order.count({ where: { orderStatus: 'delivered' } }),
-      prisma.order.count({ where: { orderStatus: 'cancelled' } }),
-      prisma.order.aggregate({
-        where: { orderStatus: { not: 'cancelled' } },
-        _sum: { total: true }
-      })
+      Order.countDocuments(),
+      Order.countDocuments({ orderStatus: 'pending' }),
+      Order.countDocuments({ orderStatus: 'processing' }),
+      Order.countDocuments({ orderStatus: 'shipping' }),
+      Order.countDocuments({ orderStatus: 'delivered' }),
+      Order.countDocuments({ orderStatus: 'cancelled' }),
+      Order.aggregate([
+        { $match: { orderStatus: { $ne: 'cancelled' } } },
+        { $group: { _id: null, total: { $sum: '$total' } } }
+      ])
     ]);
 
     res.json({
@@ -682,7 +598,7 @@ const getOrderStatistics = async (req, res) => {
           delivered: deliveredOrders,
           cancelled: cancelledOrders
         },
-        totalRevenue: totalRevenue._sum.total || 0
+        totalRevenue: totalRevenue[0]?.total || 0
       }
     });
   } catch (error) {

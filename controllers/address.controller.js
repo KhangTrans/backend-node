@@ -1,17 +1,12 @@
-const prisma = require('../lib/prisma');
+const CustomerAddress = require('../models/CustomerAddress.model');
 
 // Get all addresses of user
 const getAddresses = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const addresses = await prisma.customerAddress.findMany({
-      where: { userId },
-      orderBy: [
-        { isDefault: 'desc' },
-        { createdAt: 'desc' }
-      ]
-    });
+    const addresses = await CustomerAddress.find({ userId })
+      .sort({ isDefault: -1, createdAt: -1 });
 
     res.json({
       success: true,
@@ -33,9 +28,7 @@ const getAddressById = async (req, res) => {
     const userId = req.user.id;
     const { addressId } = req.params;
 
-    const address = await prisma.customerAddress.findUnique({
-      where: { id: parseInt(addressId) }
-    });
+    const address = await CustomerAddress.findById(addressId);
 
     if (!address) {
       return res.status(404).json({
@@ -45,7 +38,7 @@ const getAddressById = async (req, res) => {
     }
 
     // Check ownership
-    if (address.userId !== userId) {
+    if (address.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Không có quyền truy cập địa chỉ này'
@@ -91,34 +84,30 @@ const createAddress = async (req, res) => {
 
     // If setting as default, unset other default addresses
     if (isDefault) {
-      await prisma.customerAddress.updateMany({
-        where: {
+      await CustomerAddress.updateMany(
+        {
           userId,
           isDefault: true
         },
-        data: {
+        {
           isDefault: false
         }
-      });
+      );
     }
 
     // If this is first address, make it default
-    const addressCount = await prisma.customerAddress.count({
-      where: { userId }
-    });
+    const addressCount = await CustomerAddress.countDocuments({ userId });
 
-    const newAddress = await prisma.customerAddress.create({
-      data: {
-        userId,
-        fullName,
-        phoneNumber,
-        address,
-        city,
-        district,
-        ward,
-        isDefault: addressCount === 0 ? true : isDefault,
-        label
-      }
+    const newAddress = await CustomerAddress.create({
+      userId,
+      fullName,
+      phoneNumber,
+      address,
+      city,
+      district,
+      ward,
+      isDefault: addressCount === 0 ? true : isDefault,
+      label
     });
 
     res.status(201).json({
@@ -153,9 +142,7 @@ const updateAddress = async (req, res) => {
     } = req.body;
 
     // Find address
-    const existingAddress = await prisma.customerAddress.findUnique({
-      where: { id: parseInt(addressId) }
-    });
+    const existingAddress = await CustomerAddress.findById(addressId);
 
     if (!existingAddress) {
       return res.status(404).json({
@@ -165,7 +152,7 @@ const updateAddress = async (req, res) => {
     }
 
     // Check ownership
-    if (existingAddress.userId !== userId) {
+    if (existingAddress.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Không có quyền chỉnh sửa địa chỉ này'
@@ -174,32 +161,34 @@ const updateAddress = async (req, res) => {
 
     // If setting as default, unset other default addresses
     if (isDefault && !existingAddress.isDefault) {
-      await prisma.customerAddress.updateMany({
-        where: {
+      await CustomerAddress.updateMany(
+        {
           userId,
           isDefault: true,
-          id: { not: parseInt(addressId) }
+          _id: { $ne: addressId }
         },
-        data: {
+        {
           isDefault: false
         }
-      });
+      );
     }
 
     // Update address
-    const updatedAddress = await prisma.customerAddress.update({
-      where: { id: parseInt(addressId) },
-      data: {
-        ...(fullName && { fullName }),
-        ...(phoneNumber && { phoneNumber }),
-        ...(address && { address }),
-        ...(city && { city }),
-        ...(district !== undefined && { district }),
-        ...(ward !== undefined && { ward }),
-        ...(isDefault !== undefined && { isDefault }),
-        ...(label !== undefined && { label })
-      }
-    });
+    const updateData = {};
+    if (fullName) updateData.fullName = fullName;
+    if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    if (address) updateData.address = address;
+    if (city) updateData.city = city;
+    if (district !== undefined) updateData.district = district;
+    if (ward !== undefined) updateData.ward = ward;
+    if (isDefault !== undefined) updateData.isDefault = isDefault;
+    if (label !== undefined) updateData.label = label;
+
+    const updatedAddress = await CustomerAddress.findByIdAndUpdate(
+      addressId,
+      updateData,
+      { new: true }
+    );
 
     res.json({
       success: true,
@@ -223,9 +212,7 @@ const setDefaultAddress = async (req, res) => {
     const { addressId } = req.params;
 
     // Find address
-    const address = await prisma.customerAddress.findUnique({
-      where: { id: parseInt(addressId) }
-    });
+    const address = await CustomerAddress.findById(addressId);
 
     if (!address) {
       return res.status(404).json({
@@ -235,7 +222,7 @@ const setDefaultAddress = async (req, res) => {
     }
 
     // Check ownership
-    if (address.userId !== userId) {
+    if (address.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Không có quyền truy cập địa chỉ này'
@@ -243,23 +230,22 @@ const setDefaultAddress = async (req, res) => {
     }
 
     // Unset all default addresses
-    await prisma.customerAddress.updateMany({
-      where: {
+    await CustomerAddress.updateMany(
+      {
         userId,
         isDefault: true
       },
-      data: {
+      {
         isDefault: false
       }
-    });
+    );
 
     // Set new default
-    const updatedAddress = await prisma.customerAddress.update({
-      where: { id: parseInt(addressId) },
-      data: {
-        isDefault: true
-      }
-    });
+    const updatedAddress = await CustomerAddress.findByIdAndUpdate(
+      addressId,
+      { isDefault: true },
+      { new: true }
+    );
 
     res.json({
       success: true,
@@ -283,9 +269,7 @@ const deleteAddress = async (req, res) => {
     const { addressId } = req.params;
 
     // Find address
-    const address = await prisma.customerAddress.findUnique({
-      where: { id: parseInt(addressId) }
-    });
+    const address = await CustomerAddress.findById(addressId);
 
     if (!address) {
       return res.status(404).json({
@@ -295,7 +279,7 @@ const deleteAddress = async (req, res) => {
     }
 
     // Check ownership
-    if (address.userId !== userId) {
+    if (address.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Không có quyền xóa địa chỉ này'
@@ -303,22 +287,18 @@ const deleteAddress = async (req, res) => {
     }
 
     // Delete address
-    await prisma.customerAddress.delete({
-      where: { id: parseInt(addressId) }
-    });
+    await CustomerAddress.findByIdAndDelete(addressId);
 
     // If deleted address was default, set another as default
     if (address.isDefault) {
-      const firstAddress = await prisma.customerAddress.findFirst({
-        where: { userId },
-        orderBy: { createdAt: 'asc' }
-      });
+      const firstAddress = await CustomerAddress.findOne({ userId })
+        .sort({ createdAt: 1 });
 
       if (firstAddress) {
-        await prisma.customerAddress.update({
-          where: { id: firstAddress.id },
-          data: { isDefault: true }
-        });
+        await CustomerAddress.findByIdAndUpdate(
+          firstAddress._id,
+          { isDefault: true }
+        );
       }
     }
 
@@ -341,11 +321,9 @@ const getDefaultAddress = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const defaultAddress = await prisma.customerAddress.findFirst({
-      where: {
-        userId,
-        isDefault: true
-      }
+    const defaultAddress = await CustomerAddress.findOne({
+      userId,
+      isDefault: true
     });
 
     if (!defaultAddress) {

@@ -1,4 +1,5 @@
-const prisma = require('../lib/prisma');
+const Notification = require('../models/Notification.model');
+const User = require('../models/User.model');
 
 // @desc    Get all notifications for current user
 // @route   GET /api/notifications

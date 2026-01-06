@@ -1,4 +1,5 @@
-const prisma = require('../lib/prisma');
+const Voucher = require('../models/Voucher.model');
+const User = require('../models/User.model');
 
 // Get all vouchers (admin)
 const getAllVouchers = async (req, res) => {

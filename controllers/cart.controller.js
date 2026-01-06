@@ -1,38 +1,25 @@
-const prisma = require('../lib/prisma');
+const Cart = require('../models/Cart.model');
+const Product = require('../models/Product.model');
 
 // Get user's cart
 const getCart = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    let cart = await prisma.cart.findUnique({
-      where: { userId },
-      include: {
-        items: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  where: { isPrimary: true },
-                  take: 1
-                }
-              }
-            }
-          }
+    let cart = await Cart.findOne({ userId })
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'images',
+          match: { isPrimary: true }
         }
-      }
-    });
+      });
 
     // Create cart if it doesn't exist
     if (!cart) {
-      cart = await prisma.cart.create({
-        data: {
-          userId,
-          items: []
-        },
-        include: {
-          items: true
-        }
+      cart = await Cart.create({
+        userId,
+        items: []
       });
     }
 
@@ -84,9 +71,7 @@ const addToCart = async (req, res) => {
     }
 
     // Check if product exists and is active
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(productId) }
-    });
+    const product = await Product.findById(productId);
 
     if (!product) {
       return res.status(404).json({
@@ -111,28 +96,21 @@ const addToCart = async (req, res) => {
     }
 
     // Get or create cart
-    let cart = await prisma.cart.findUnique({
-      where: { userId }
-    });
+    let cart = await Cart.findOne({ userId });
 
     if (!cart) {
-      cart = await prisma.cart.create({
-        data: { userId }
-      });
+      cart = await Cart.create({ userId, items: [] });
     }
 
     // Check if item already exists in cart
-    const existingItem = await prisma.cartItem.findFirst({
-      where: {
-        cartId: cart.id,
-        productId: parseInt(productId)
-      }
-    });
+    const existingItemIndex = cart.items.findIndex(
+      item => item.product.toString() === productId
+    );
 
-    let cartItem;
-    if (existingItem) {
+    let updatedCart;
+    if (existingItemIndex > -1) {
       // Update quantity
-      const newQuantity = existingItem.quantity + quantity;
+      const newQuantity = cart.items[existingItemIndex].quantity + quantity;
       
       if (product.stock < newQuantity) {
         return res.status(400).json({
@@ -141,49 +119,46 @@ const addToCart = async (req, res) => {
         });
       }
 
-      cartItem = await prisma.cartItem.update({
-        where: { id: existingItem.id },
-        data: { 
-          quantity: newQuantity,
-          price: product.price
-        },
-        include: {
-          product: {
-            include: {
-              images: {
-                where: { isPrimary: true },
-                take: 1
-              }
-            }
+      cart.items[existingItemIndex].quantity = newQuantity;
+      cart.items[existingItemIndex].price = product.price;
+      await cart.save();
+
+      updatedCart = await Cart.findOne({ userId })
+        .populate({
+          path: 'items.product',
+          populate: {
+            path: 'images',
+            match: { isPrimary: true }
           }
-        }
-      });
+        });
     } else {
       // Create new cart item
-      cartItem = await prisma.cartItem.create({
-        data: {
-          cartId: cart.id,
-          productId: parseInt(productId),
-          quantity: quantity,
-          price: product.price
-        },
-        include: {
-          product: {
-            include: {
-              images: {
-                where: { isPrimary: true },
-                take: 1
-              }
-            }
-          }
-        }
+      cart.items.push({
+        product: productId,
+        quantity: quantity,
+        price: product.price
       });
+      await cart.save();
+
+      updatedCart = await Cart.findOne({ userId })
+        .populate({
+          path: 'items.product',
+          populate: {
+            path: 'images',
+            match: { isPrimary: true }
+          }
+        });
     }
+
+    // Get the added item
+    const addedItem = updatedCart.items.find(
+      item => item.product._id.toString() === productId
+    );
 
     res.status(201).json({
       success: true,
       message: 'Đã thêm vào giỏ hàng',
-      data: cartItem
+      data: addedItem
     });
   } catch (error) {
     console.error('Add to cart error:', error);
@@ -209,14 +184,18 @@ const updateCartItem = async (req, res) => {
       });
     }
 
+    // Find cart
+    const cart = await Cart.findOne({ userId });
+
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy giỏ hàng'
+      });
+    }
+
     // Find cart item
-    const cartItem = await prisma.cartItem.findUnique({
-      where: { id: parseInt(itemId) },
-      include: {
-        cart: true,
-        product: true
-      }
-    });
+    const cartItem = cart.items.id(itemId);
 
     if (!cartItem) {
       return res.status(404).json({
@@ -225,40 +204,40 @@ const updateCartItem = async (req, res) => {
       });
     }
 
-    // Verify ownership
-    if (cartItem.cart.userId !== userId) {
-      return res.status(403).json({
+    // Get product to check stock
+    const product = await Product.findById(cartItem.product);
+
+    if (!product) {
+      return res.status(404).json({
         success: false,
-        message: 'Không có quyền truy cập'
+        message: 'Sản phẩm không tồn tại'
       });
     }
 
     // Check stock
-    if (cartItem.product.stock < quantity) {
+    if (product.stock < quantity) {
       return res.status(400).json({
         success: false,
-        message: `Chỉ còn ${cartItem.product.stock} sản phẩm trong kho`
+        message: `Chỉ còn ${product.stock} sản phẩm trong kho`
       });
     }
 
     // Update quantity
-    const updatedItem = await prisma.cartItem.update({
-      where: { id: parseInt(itemId) },
-      data: { 
-        quantity: quantity,
-        price: cartItem.product.price
-      },
-      include: {
-        product: {
-          include: {
-            images: {
-              where: { isPrimary: true },
-              take: 1
-            }
-          }
+    cartItem.quantity = quantity;
+    cartItem.price = product.price;
+    await cart.save();
+
+    // Populate and return
+    const updatedCart = await Cart.findOne({ userId })
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'images',
+          match: { isPrimary: true }
         }
-      }
-    });
+      });
+
+    const updatedItem = updatedCart.items.id(itemId);
 
     res.json({
       success: true,
@@ -281,33 +260,19 @@ const removeFromCart = async (req, res) => {
     const userId = req.user.id;
     const { itemId } = req.params;
 
-    // Find cart item
-    const cartItem = await prisma.cartItem.findUnique({
-      where: { id: parseInt(itemId) },
-      include: {
-        cart: true
-      }
-    });
+    // Find cart
+    const cart = await Cart.findOne({ userId });
 
-    if (!cartItem) {
+    if (!cart) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy sản phẩm trong giỏ hàng'
+        message: 'Không tìm thấy giỏ hàng'
       });
     }
 
-    // Verify ownership
-    if (cartItem.cart.userId !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Không có quyền truy cập'
-      });
-    }
-
-    // Delete cart item
-    await prisma.cartItem.delete({
-      where: { id: parseInt(itemId) }
-    });
+    // Remove cart item
+    cart.items.pull(itemId);
+    await cart.save();
 
     res.json({
       success: true,
@@ -328,9 +293,7 @@ const clearCart = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const cart = await prisma.cart.findUnique({
-      where: { userId }
-    });
+    const cart = await Cart.findOne({ userId });
 
     if (!cart) {
       return res.status(404).json({
@@ -340,9 +303,8 @@ const clearCart = async (req, res) => {
     }
 
     // Delete all cart items
-    await prisma.cartItem.deleteMany({
-      where: { cartId: cart.id }
-    });
+    cart.items = [];
+    await cart.save();
 
     res.json({
       success: true,

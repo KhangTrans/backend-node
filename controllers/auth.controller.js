@@ -1,6 +1,5 @@
-const prisma = require('../lib/prisma');
+const User = require('../models/User.model');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const { validationResult } = require('express-validator');
 
 // Generate JWT Token
@@ -27,10 +26,8 @@ exports.register = async (req, res) => {
     const { username, email, password, fullName } = req.body;
 
     // Check if user already exists
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ email }, { username }]
-      }
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }]
     });
 
     if (existingUser) {
@@ -40,29 +37,23 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new user
-    const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        password: hashedPassword,
-        fullName
-      }
+    // Create new user (password will be hashed by model pre-save hook)
+    const user = await User.create({
+      username,
+      email,
+      password,
+      fullName
     });
 
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(user._id);
 
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
       data: {
         user: {
-          id: user.id,
+          id: user._id,
           username: user.username,
           email: user.email,
           fullName: user.fullName,
@@ -98,9 +89,7 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // Check if user exists
-    const user = await prisma.user.findUnique({ 
-      where: { email } 
-    });
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({ 
@@ -117,8 +106,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Verify password using model method
+    const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
       return res.status(401).json({ 
@@ -128,14 +117,14 @@ exports.login = async (req, res) => {
     }
 
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(user._id);
 
     res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
         user: {
-          id: user.id,
+          id: user._id,
           username: user.username,
           email: user.email,
           fullName: user.fullName,
@@ -159,19 +148,7 @@ exports.login = async (req, res) => {
 // @access  Private
 exports.getMe = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
+    const user = await User.findById(req.user.id).select('-password');
 
     res.status(200).json({
       success: true,
@@ -192,19 +169,9 @@ exports.getMe = async (req, res) => {
 // @access  Public (for testing - should be protected in production)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const users = await User.find()
+      .select('-password')
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,

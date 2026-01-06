@@ -3,7 +3,7 @@ primary_region = "sin"
 
 [build]
   [build.env]
-    NODE_VERSION = "18"
+    NODE_VERSION = "24"
 
 [env]
   PORT = "8080"

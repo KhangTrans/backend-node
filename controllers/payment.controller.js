@@ -1,4 +1,5 @@
-const prisma = require('../lib/prisma');
+const Order = require('../models/Order.model');
+const Voucher = require('../models/Voucher.model');
 const vnpay = require('../config/vnpay');
 const zalopay = require('../config/zalopay');
 

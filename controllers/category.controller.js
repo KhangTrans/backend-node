@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+const Category = require('../models/Category.model');
 const { validationResult } = require('express-validator');
 const { generateUniqueSlug } = require('../utils/slug');
 
@@ -19,16 +19,14 @@ exports.createCategory = async (req, res) => {
 
     // Generate unique slug
     const slug = customSlug 
-      ? await generateUniqueSlug(customSlug, null, prisma)
-      : await generateUniqueSlug(name, null, prisma);
+      ? await generateUniqueSlug(customSlug, null, Category)
+      : await generateUniqueSlug(name, null, Category);
 
-    const category = await prisma.category.create({
-      data: {
-        name,
-        slug,
-        description,
-        imageUrl
-      }
+    const category = await Category.create({
+      name,
+      slug,
+      description,
+      imageUrl
     });
 
     res.status(201).json({
@@ -54,31 +52,27 @@ exports.getAllCategories = async (req, res) => {
     const { includeProducts = false, search } = req.query;
 
     // Build filter
-    const where = { isActive: true };
+    const filter = { isActive: true };
 
-    // Search functionality (MySQL doesn't support mode: 'insensitive')
+    // Search functionality
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } }
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
       ];
     }
 
-    const categories = await prisma.category.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      include: includeProducts === 'true' ? {
-        products: {
-          where: { isActive: true },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            price: true
-          }
-        }
-      } : undefined
-    });
+    let query = Category.find(filter).sort({ name: 1 });
+
+    if (includeProducts === 'true') {
+      query = query.populate({
+        path: 'products',
+        match: { isActive: true },
+        select: '_id name slug price'
+      });
+    }
+
+    const categories = await query;
 
     res.status(200).json({
       success: true,
@@ -102,20 +96,15 @@ exports.getCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        products: {
-          where: { isActive: true },
-          include: {
-            images: {
-              where: { isPrimary: true },
-              take: 1
-            }
-          }
+    const category = await Category.findById(id)
+      .populate({
+        path: 'products',
+        match: { isActive: true },
+        populate: {
+          path: 'images',
+          match: { isPrimary: true }
         }
-      }
-    });
+      });
 
     if (!category) {
       return res.status(404).json({
@@ -145,20 +134,15 @@ exports.getCategoryBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { slug },
-      include: {
-        products: {
-          where: { isActive: true },
-          include: {
-            images: {
-              where: { isPrimary: true },
-              take: 1
-            }
-          }
+    const category = await Category.findOne({ slug })
+      .populate({
+        path: 'products',
+        match: { isActive: true },
+        populate: {
+          path: 'images',
+          match: { isPrimary: true }
         }
-      }
-    });
+      });
 
     if (!category) {
       return res.status(404).json({
@@ -189,9 +173,7 @@ exports.updateCategory = async (req, res) => {
     const { id } = req.params;
     const { name, slug: customSlug, description, imageUrl, isActive } = req.body;
 
-    const existingCategory = await prisma.category.findUnique({
-      where: { id: parseInt(id) }
-    });
+    const existingCategory = await Category.findById(id);
 
     if (!existingCategory) {
       return res.status(404).json({
@@ -205,21 +187,23 @@ exports.updateCategory = async (req, res) => {
     if (customSlug || (name && name !== existingCategory.name)) {
       newSlug = await generateUniqueSlug(
         customSlug || name, 
-        parseInt(id), 
-        prisma
+        id, 
+        Category
       );
     }
 
-    const category = await prisma.category.update({
-      where: { id: parseInt(id) },
-      data: {
-        name,
-        slug: newSlug,
-        description,
-        imageUrl,
-        isActive
-      }
-    });
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (newSlug) updateData.slug = newSlug;
+    if (description !== undefined) updateData.description = description;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    const category = await Category.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    );
 
     res.status(200).json({
       success: true,
@@ -243,12 +227,7 @@ exports.deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        products: true
-      }
-    });
+    const category = await Category.findById(id).populate('products');
 
     if (!category) {
       return res.status(404).json({
@@ -257,16 +236,14 @@ exports.deleteCategory = async (req, res) => {
       });
     }
 
-    if (category.products.length > 0) {
+    if (category.products && category.products.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete category with existing products'
       });
     }
 
-    await prisma.category.delete({
-      where: { id: parseInt(id) }
-    });
+    await Category.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,

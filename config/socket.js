@@ -1,6 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const prisma = require('../lib/prisma');
+const User = require('../models/User.model');
 
 let io;
 
@@ -31,16 +31,13 @@ const initializeSocket = (server) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // Lấy thông tin user từ database
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-        select: { id: true, username: true, email: true, role: true, isActive: true },
-      });
+      const user = await User.findById(decoded.id).select('_id username email role isActive');
 
       if (!user || !user.isActive) {
         return next(new Error('Authentication error: User not found or inactive'));
       }
 
-      socket.userId = user.id;
+      socket.userId = user._id.toString();
       socket.userRole = user.role;
       socket.username = user.username;
       

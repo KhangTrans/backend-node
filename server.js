@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 require('dotenv').config();
+const { connectMongoDB } = require('./config/mongodb');
 const { connectRedis, disconnectRedis } = require('./config/redis');
 const { initializeSocket } = require('./config/socket');
 
@@ -55,7 +56,8 @@ app.get('/', (req, res) => {
     status: 'running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    hasDatabaseUrl: !!process.env.DATABASE_URL
+    database: 'MongoDB',
+    hasDatabaseUrl: !!process.env.MONGODB_URI
   });
 });
 
@@ -64,7 +66,7 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok',
     timestamp: new Date().toISOString(),
-    database: process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED - Please add DATABASE_URL to Vercel'
+    database: process.env.MONGODB_URI ? 'MongoDB configured' : 'NOT CONFIGURED - Please add MONGODB_URI'
   });
 });
 
@@ -80,15 +82,32 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Initialize Redis connection
-connectRedis().catch(err => {
-  console.error('Failed to connect to Redis:', err);
-});
+// Initialize connections
+const initializeServer = async () => {
+  try {
+    // Connect to MongoDB
+    if (process.env.MONGODB_URI) {
+      await connectMongoDB();
+    } else {
+      console.warn('⚠️  MONGODB_URI not configured');
+    }
 
-// Initialize Socket.IO (only for non-Vercel environments)
-if (process.env.VERCEL !== '1') {
-  initializeSocket(server);
-}
+    // Initialize Redis connection
+    await connectRedis().catch(err => {
+      console.error('Failed to connect to Redis:', err);
+    });
+
+    // Initialize Socket.IO (only for non-Vercel environments)
+    if (process.env.VERCEL !== '1') {
+      initializeSocket(server);
+    }
+  } catch (error) {
+    console.error('Failed to initialize server:', error);
+  }
+};
+
+// Start initialization
+initializeServer();
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
