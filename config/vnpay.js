@@ -1,6 +1,16 @@
 const crypto = require('crypto');
 const querystring = require('querystring');
-const dateFormat = require('dateformat');
+
+// Helper function to format date to yyyyMMddHHmmss
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
 
 const vnpayConfig = {
   vnp_TmnCode: process.env.VNPAY_TMN_CODE,
@@ -35,7 +45,7 @@ function sortObject(obj) {
 function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
   try {
     const date = new Date();
-    const createDate = dateFormat(date, 'yyyymmddHHMMss');
+    const createDate = formatDate(date);
     
     let vnp_Params = {};
     vnp_Params['vnp_Version'] = '2.1.0';
@@ -99,8 +109,8 @@ function verifyReturnUrl(vnp_Params) {
 async function queryTransaction(orderId, transDate) {
   try {
     const date = new Date();
-    const requestId = dateFormat(date, 'HHMMss');
-    const createDate = dateFormat(date, 'yyyymmddHHMMss');
+    const requestId = String(date.getHours()).padStart(2, '0') + String(date.getMinutes()).padStart(2, '0') + String(date.getSeconds()).padStart(2, '0');
+    const createDate = formatDate(date);
 
     let vnp_Params = {};
     vnp_Params['vnp_RequestId'] = requestId;
