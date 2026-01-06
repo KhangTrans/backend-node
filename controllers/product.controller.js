@@ -71,7 +71,7 @@ exports.createProduct = async (req, res) => {
     // Populate relations
     await product.populate([
       {
-        path: 'user',
+        path: 'createdBy',
         select: '_id username email'
       },
       { path: 'category' }
@@ -124,7 +124,7 @@ exports.getAllProducts = async (req, res) => {
         .limit(parseInt(limit))
         .sort({ createdAt: -1 })
         .populate({
-          path: 'user',
+          path: 'createdBy',
           select: '_id username fullName'
         })
         .populate('category'),
@@ -158,7 +158,7 @@ exports.getProduct = async (req, res) => {
 
     const product = await Product.findById(id)
       .populate({
-        path: 'user',
+        path: 'createdBy',
         select: '_id username fullName email'
       })
       .populate('category');
@@ -193,7 +193,7 @@ exports.getProductBySlug = async (req, res) => {
 
     const product = await Product.findOne({ slug })
       .populate({
-        path: 'user',
+        path: 'createdBy',
         select: '_id username fullName email'
       })
       .populate('category');
@@ -320,7 +320,7 @@ exports.updateProduct = async (req, res) => {
       { new: true }
     )
       .populate({
-        path: 'user',
+        path: 'createdBy',
         select: '_id username fullName'
       })
       .populate('category');
