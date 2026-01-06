@@ -50,7 +50,7 @@ exports.createVNPayPayment = async (req, res) => {
 
     const paymentUrl = vnpay.createPaymentUrl(
       order.orderNumber,
-      parseFloat(order.totalAmount),
+      parseFloat(order.total),
       orderInfo || `Thanh toan don hang ${order.orderNumber}`,
       ipAddr,
       locale || 'vn'
