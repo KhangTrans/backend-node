@@ -61,12 +61,17 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
 
     vnp_Params = sortObject(vnp_Params);
 
-    const signData = querystring.stringify(vnp_Params, { encode: false });
+    // Create query string for signing (without encoding)
+    const signData = Object.keys(vnp_Params)
+      .map(key => `${key}=${vnp_Params[key]}`)
+      .join('&');
+    
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
-    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, { encode: false });
+    // Create payment URL with proper encoding
+    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params);
 
     return paymentUrl;
   } catch (error) {
@@ -87,7 +92,11 @@ function verifyReturnUrl(vnp_Params) {
 
     vnp_Params = sortObject(vnp_Params);
 
-    const signData = querystring.stringify(vnp_Params, { encode: false });
+    // Create query string for verification (without encoding)
+    const signData = Object.keys(vnp_Params)
+      .map(key => `${key}=${vnp_Params[key]}`)
+      .join('&');
+    
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
 
