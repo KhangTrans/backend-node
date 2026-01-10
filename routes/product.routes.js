@@ -27,8 +27,8 @@ const productValidation = [
     .withMessage('Stock must be a non-negative integer'),
   body('categoryId')
     .optional()
-    .isInt()
-    .withMessage('Category ID must be an integer'),
+    .isMongoId()
+    .withMessage('Category ID must be a valid MongoDB ID'),
   body('images')
     .optional()
     .isArray()
