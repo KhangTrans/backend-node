@@ -295,17 +295,7 @@ const getOrderById = async (req, res) => {
     const { orderId } = req.params;
 
     const order = await Order.findById(orderId)
-      .populate({
-        path: 'items.productId',
-        populate: {
-          path: 'images',
-          match: { isPrimary: true }
-        }
-      })
-      .populate({
-        path: 'userId',
-        select: '_id username email fullName'
-      })
+      .populate('items.productId')
       .populate('voucherId');
 
     if (!order) {
