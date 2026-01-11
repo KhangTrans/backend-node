@@ -53,6 +53,11 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     // Ensure IP is valid or default to 127.0.0.1
     const validIp = (ipAddr && ipAddr.length > 6) ? ipAddr : '127.0.0.1';
 
+    // Remove Vietnamese accents from OrderInfo to avoid encoding issues with VNPay
+    if (orderInfo) {
+      orderInfo = orderInfo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+    }
+
     let vnp_Params = {};
     vnp_Params['vnp_Version'] = '2.1.0';
     vnp_Params['vnp_Command'] = 'pay';
@@ -77,20 +82,23 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params = sortObject(vnp_Params);
 
     // Create query string for signing (MANUAL ITERATION to strictly respect sorted order and Raw values)
-    // This avoids any 'querystring' module quirks regarding sorting or encoding
     const signData = Object.keys(vnp_Params)
       .map(key => `${key}=${vnp_Params[key]}`)
       .join('&');
     
+    // Log for debugging
+    console.log("-------------------- VNPAY DEBUG --------------------");
+    console.log("TmnCode:", tmnCode);
+    console.log("HashSecret (First 5 chars):", secretKey.substring(0, 5) + "...");
+    console.log("SignData (Raw string to hash):", signData);
+    console.log("-----------------------------------------------------");
+
     const hmac = crypto.createHmac("sha512", secretKey);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
     // Create payment URL (standard encoding for the browser)
     const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, null, null, { encodeURIComponent: querystring.escape });
-
-    console.log('VNPay Create URL success');
-    console.log('SignData:', signData);
 
     return paymentUrl;
   } catch (error) {
