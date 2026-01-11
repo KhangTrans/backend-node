@@ -187,7 +187,7 @@ const updateCartItem = async (req, res) => {
     }
 
     // Get product to check stock
-    const product = await Product.findById(cartItem.product);
+    const product = await Product.findById(cartItem.productId);
 
     if (!product) {
       return res.status(404).json({
