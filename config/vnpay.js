@@ -39,6 +39,10 @@ function sortObject(obj) {
  */
 function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
   try {
+    if (!vnpayConfig.vnp_TmnCode || !vnpayConfig.vnp_HashSecret) {
+      throw new Error("Missing VNPay configuration (vnp_TmnCode or vnp_HashSecret)");
+    }
+
     const date = new Date();
     const createDate = formatDate(date);
     
@@ -51,27 +55,31 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_TxnRef'] = orderId;
     vnp_Params['vnp_OrderInfo'] = orderInfo;
     vnp_Params['vnp_OrderType'] = 'other';
-    vnp_Params['vnp_Amount'] = amount * 100; // VNPay nhân 100
+    vnp_Params['vnp_Amount'] = Math.floor(amount * 100); // Ensure integer
     vnp_Params['vnp_ReturnUrl'] = vnpayConfig.vnp_ReturnUrl;
     vnp_Params['vnp_IpAddr'] = ipAddr;
     vnp_Params['vnp_CreateDate'] = createDate;
 
-    // Bank code (optional)
-    // vnp_Params['vnp_BankCode'] = 'NCB';
+    // Filter out empty values
+    Object.keys(vnp_Params).forEach(key => {
+      if (vnp_Params[key] === null || vnp_Params[key] === undefined || vnp_Params[key] === '') {
+        delete vnp_Params[key];
+      }
+    });
 
     vnp_Params = sortObject(vnp_Params);
 
-    // Create query string for signing (without encoding)
-    const signData = Object.keys(vnp_Params)
-      .map(key => `${key}=${vnp_Params[key]}`)
-      .join('&');
+    // Create query string for signing (raw data, no encoding)
+    const signData = querystring.stringify(vnp_Params, null, null, { encodeURIComponent: (str) => str });
     
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
-    // Create payment URL with proper encoding
-    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params);
+    // Create payment URL (standard encoding)
+    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, null, null, { encodeURIComponent: querystring.escape });
+
+    console.log('VNPay Create URL:', { signData, paymentUrl });
 
     return paymentUrl;
   } catch (error) {
@@ -92,10 +100,8 @@ function verifyReturnUrl(vnp_Params) {
 
     vnp_Params = sortObject(vnp_Params);
 
-    // Create query string for verification (without encoding)
-    const signData = Object.keys(vnp_Params)
-      .map(key => `${key}=${vnp_Params[key]}`)
-      .join('&');
+    // Create query string for verification (raw data, no encoding)
+    const signData = querystring.stringify(vnp_Params, null, null, { encodeURIComponent: (str) => str });
     
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
