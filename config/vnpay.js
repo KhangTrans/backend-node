@@ -57,14 +57,11 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     // Ensure IP is valid or default to 127.0.0.1
     const validIp = (ipAddr && ipAddr.length > 6) ? ipAddr : '127.0.0.1';
 
-    // Remove Vietnamese accents from OrderInfo to avoid encoding issues with VNPay
-    if (orderInfo) {
-      orderInfo = orderInfo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
-    }
-
-    if (!amount || isNaN(amount)) {
-      throw new Error("Invalid amount");
-    }
+    // TEST: Remove Order Info spaces to rule out Encoding mismatches
+    let cleanOrderInfo = 'ThanhToanTest';
+    // if (orderInfo) {
+    //  cleanOrderInfo = orderInfo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+    // }
 
     let vnp_Params = {};
     vnp_Params['vnp_Version'] = '2.1.0';
@@ -73,7 +70,7 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_Locale'] = locale;
     vnp_Params['vnp_CurrCode'] = 'VND';
     vnp_Params['vnp_TxnRef'] = orderId;
-    vnp_Params['vnp_OrderInfo'] = orderInfo;
+    vnp_Params['vnp_OrderInfo'] = cleanOrderInfo;
     vnp_Params['vnp_OrderType'] = 'other';
     vnp_Params['vnp_Amount'] = Math.floor(amount * 100);
     vnp_Params['vnp_ReturnUrl'] = returnUrl;
