@@ -58,6 +58,10 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
       orderInfo = orderInfo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
     }
 
+    if (!amount || isNaN(amount)) {
+      throw new Error("Invalid amount");
+    }
+
     let vnp_Params = {};
     vnp_Params['vnp_Version'] = '2.1.0';
     vnp_Params['vnp_Command'] = 'pay';
@@ -79,18 +83,21 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
       }
     });
 
+    // Sort parameters (Although sortObject does this, we sort keys explicitly below for signing)
     vnp_Params = sortObject(vnp_Params);
 
-    // Create query string for signing (MANUAL ITERATION to strictly respect sorted order and Raw values)
+    // Create query string for signing (MANUAL ITERATION + FORCE SORT)
     const signData = Object.keys(vnp_Params)
+      .sort() // FORCE SORT to match VNPay requirements 100%
       .map(key => `${key}=${vnp_Params[key]}`)
       .join('&');
     
-    // Log for debugging
+    // Log for debugging (CRITICAL: Check server logs for this)
     console.log("-------------------- VNPAY DEBUG --------------------");
-    console.log("TmnCode:", tmnCode);
-    console.log("HashSecret (First 5 chars):", secretKey.substring(0, 5) + "...");
-    console.log("SignData (Raw string to hash):", signData);
+    console.log("CreateDate:", createDate);
+    console.log("OrderId:", orderId);
+    console.log("Amount (x100):", vnp_Params['vnp_Amount']);
+    console.log("SignData (Raw):", signData);
     console.log("-----------------------------------------------------");
 
     const hmac = crypto.createHmac("sha512", secretKey);
