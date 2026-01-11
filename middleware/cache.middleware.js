@@ -8,9 +8,12 @@ const { getCache, setCache } = require('../config/redis');
 const cacheMiddleware = (keyPrefix, ttl = 300) => {
   return async (req, res, next) => {
     try {
-      // Build cache key from prefix and query params
+      // Build cache key from prefix, route params, and query params
+      const routeParams = req.params.id || req.params.slug || '';
       const queryString = JSON.stringify(req.query);
-      const cacheKey = `${keyPrefix}:${queryString}`;
+      const cacheKey = routeParams 
+        ? `${keyPrefix}:${routeParams}:${queryString}`
+        : `${keyPrefix}:${queryString}`;
 
       // Try to get from cache
       const cachedData = await getCache(cacheKey);
