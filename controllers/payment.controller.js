@@ -240,7 +240,8 @@ exports.createZaloPayPayment = async (req, res) => {
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        message: 'Không thể tạo thanh toán ZaloPay',
+        message: 'Không thể tạo thanh toán ZaloPay: ' + (result.sub_return_message || result.return_message || 'Lỗi không xác định'),
+        resultCode: result.return_code,
         error: result
       });
     }
