@@ -224,7 +224,7 @@ exports.createZaloPayPayment = async (req, res) => {
 
     // Format items for ZaloPay
     const items = order.items.map(item => ({
-      itemid: item.productId?._id || item.productId,
+      itemid: (item.productId?._id || item.productId).toString(),
       itemname: item.productId?.name || item.productName,
       itemprice: parseFloat(item.price),
       itemquantity: item.quantity
@@ -232,7 +232,7 @@ exports.createZaloPayPayment = async (req, res) => {
 
     const result = await zalopay.createOrder(
       order.id,
-      parseFloat(order.totalAmount),
+      parseFloat(order.total),
       orderInfo || `Thanh toan don hang ${order.orderNumber}`,
       items
     );
@@ -362,7 +362,7 @@ exports.getPaymentStatus = async (req, res) => {
         orderNumber: order.orderNumber,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
-        totalAmount: order.totalAmount,
+        totalAmount: order.total,
         paidAt: order.paidAt,
         transactionId: order.transactionId
       }
