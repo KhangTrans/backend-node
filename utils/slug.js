@@ -50,17 +50,15 @@ function generateSlug(text) {
  * @param {number} id - Product ID to exclude from check
  * @returns {Promise<string>} - Unique slug
  */
-async function generateUniqueSlug(text, id = null, prisma) {
+async function generateUniqueSlug(text, id = null, Model) {
   let slug = generateSlug(text);
   let counter = 1;
   let uniqueSlug = slug;
 
   while (true) {
-    const existing = await prisma.product.findFirst({
-      where: {
-        slug: uniqueSlug,
-        id: id ? { not: id } : undefined
-      }
+    const existing = await Model.findOne({
+      slug: uniqueSlug,
+      _id: id ? { $ne: id } : undefined
     });
 
     if (!existing) {
