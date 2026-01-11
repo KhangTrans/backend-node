@@ -43,9 +43,9 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
       throw new Error("Missing VNPay configuration (vnp_TmnCode or vnp_HashSecret)");
     }
 
-    const tmnCode = vnpayConfig.vnp_TmnCode.trim();
-    const secretKey = vnpayConfig.vnp_HashSecret.trim();
-    // FORCE HARDCODE URL to ensure it is correct (Bypass Render Env issues)
+    // FORCE HARDCODE CREDENTIALS (Bypass Render Env Persistence Issues)
+    const tmnCode = 'TWAPOHRH';
+    const secretKey = 'RT0UBKYFBJX8B56RH7WUJJO8EICZRUAF';
     const returnUrl = 'https://khangtrandev.id.vn/payment/vnpay/return';
 
     // Use Vietnam Time (GMT+7)

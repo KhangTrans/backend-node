@@ -1,33 +1,28 @@
 const crypto = require('crypto');
 const querystring = require('querystring');
 
-const secretKey = 'C1VQKHGREPTR1H55PRKBZV5OX3LSDQWS'; // Key from your .env
+const secretKey = 'C1VQKHGREPTR1H55PRKBZV5OX3LSDQWS'; // Current Key
 const params = {
   vnp_Amount: '3002000000',
   vnp_Command: 'pay',
-  vnp_CreateDate: '20260111154448',
+  vnp_CreateDate: '20260112051813',
   vnp_CurrCode: 'VND',
   vnp_IpAddr: '27.64.219.94',
   vnp_Locale: 'vn',
-  vnp_OrderInfo: 'Thanh toan don hang 6963c56e5522c3edbb378a72',
+  vnp_OrderInfo: 'Thanh toan don hang 696421a3bcb19090fbde5691',
   vnp_OrderType: 'other',
-  vnp_ReturnUrl: 'https://khangtrandev.id.vn/payment/vnpay/return',
+  vnp_ReturnUrl: 'https://khangtrandev.id.vn/payment/vnpay/return', // Corrected URL
   vnp_TmnCode: 'BDTRQ8G8',
-  vnp_TxnRef: 'ORD2601110543',
+  vnp_TxnRef: 'ORD2601115440',
   vnp_Version: '2.1.0'
 };
 
-// Sort
 const sortedKeys = Object.keys(params).sort();
-
-// Create Raw Sign Data (Exactly as my code does)
 const signData = sortedKeys.map(key => `${key}=${params[key]}`).join('&');
 
-// Create Hash
 const hmac = crypto.createHmac("sha512", secretKey);
 const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
 
-console.log("Calculated Hash:", signed);
-console.log("Target Hash (from URL):", "50c3560639d1cd4dfa33e81630dd529fe0d37ead7011a6bbb5c80df5ad3e9fca987ecbb6b2085d89c2b7be91e447f54556d99325292e61956187d2653ae53fab");
-console.log("Match?", signed === "50c3560639d1cd4dfa33e81630dd529fe0d37ead7011a6bbb5c80df5ad3e9fca987ecbb6b2085d89c2b7be91e447f54556d99325292e61956187d2653ae53fab");
-console.log("Raw SignData used:", signData);
+console.log("Calculated:", signed);
+console.log("From URL:  ", "032d1189500d6d22a7495a1b6597a3aaa821c85131c0e3af5d0dadd40de4ebb0e3201b9f6ff91227c4546211ac21d75a475152986acee7e5fa7f70c01dd4a22d");
+console.log("Match?", signed === "032d1189500d6d22a7495a1b6597a3aaa821c85131c0e3af5d0dadd40de4ebb0e3201b9f6ff91227c4546211ac21d75a475152986acee7e5fa7f70c01dd4a22d");
