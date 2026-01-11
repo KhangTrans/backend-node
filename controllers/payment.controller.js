@@ -199,7 +199,7 @@ exports.createZaloPayPayment = async (req, res) => {
     }
 
     // Verify order
-    const order = await Order.findById(orderId).populate('items.product');
+    const order = await Order.findById(orderId).populate('items.productId');
 
     if (!order) {
       return res.status(404).json({
@@ -224,8 +224,8 @@ exports.createZaloPayPayment = async (req, res) => {
 
     // Format items for ZaloPay
     const items = order.items.map(item => ({
-      itemid: item.productId,
-      itemname: item.product.name,
+      itemid: item.productId?._id || item.productId,
+      itemname: item.productId?.name || item.productName,
       itemprice: parseFloat(item.price),
       itemquantity: item.quantity
     }));
