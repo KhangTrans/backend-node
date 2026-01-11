@@ -2,6 +2,7 @@ const Order = require('../models/Order.model');
 const Voucher = require('../models/Voucher.model');
 const vnpay = require('../config/vnpay');
 const zalopay = require('../config/zalopay');
+const Cart = require('../models/Cart.model');
 
 // @desc    Create VNPay payment URL
 // @route   POST /api/payment/vnpay/create
@@ -114,6 +115,12 @@ exports.vnpayReturn = async (req, res) => {
         transactionId: transactionNo
       });
 
+      // Clear cart on success
+      await Cart.findOneAndUpdate(
+        { userId: order.userId },
+        { items: [] }
+      );
+
       return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}&orderNumber=${orderId}`);
     } else {
       // Payment failed
@@ -169,6 +176,12 @@ exports.vnpayIPN = async (req, res) => {
         status: 'confirmed',
         paidAt: new Date()
       });
+
+      // Clear cart on success (IPN backup)
+      await Cart.findOneAndUpdate(
+        { userId: order.userId },
+        { items: [] }
+      );
 
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
     } else {

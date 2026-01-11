@@ -203,9 +203,11 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Clear cart
-    cart.items = [];
-    await cart.save();
+    // Clear cart ONLY if COD (For Online Payment, clear after success in payment.controller)
+    if (paymentMethod === 'cod') {
+      cart.items = [];
+      await cart.save();
+    }
 
     // Populate order
     await order.populate([
