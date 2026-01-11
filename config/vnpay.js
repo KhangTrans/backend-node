@@ -45,9 +45,13 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
 
     const tmnCode = vnpayConfig.vnp_TmnCode.trim();
     const secretKey = vnpayConfig.vnp_HashSecret.trim();
-    const returnUrl = vnpayConfig.vnp_ReturnUrl.trim();
+    // FORCE HARDCODE URL to ensure it is correct (Bypass Render Env issues)
+    const returnUrl = 'https://khangtrandev.id.vn/payment/vnpay/return';
 
+    // Use Vietnam Time (GMT+7)
+    // Render servers are UTC, so we must add 7 hours manually or use locale string
     const date = new Date();
+    date.setHours(date.getHours() + 7);
     const createDate = formatDate(date);
     
     // Ensure IP is valid or default to 127.0.0.1
