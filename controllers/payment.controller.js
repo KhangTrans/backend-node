@@ -3,6 +3,7 @@ const Voucher = require('../models/Voucher.model');
 const vnpay = require('../config/vnpay');
 const zalopay = require('../config/zalopay');
 const Cart = require('../models/Cart.model');
+const Product = require('../models/Product.model');
 
 // @desc    Create VNPay payment URL
 // @route   POST /api/payment/vnpay/create
@@ -124,9 +125,19 @@ exports.vnpayReturn = async (req, res) => {
       return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}&orderNumber=${orderId}`);
     } else {
       // Payment failed
-      await Order.findByIdAndUpdate(order._id, {
-        paymentStatus: 'failed'
-      });
+      if (order.paymentStatus !== 'failed') {
+        await Order.findByIdAndUpdate(order._id, {
+          paymentStatus: 'failed',
+          status: 'cancelled' // Cancel order
+        });
+
+        // Restore stock
+        for (const item of order.items) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { stock: item.quantity }
+          });
+        }
+      }
 
       return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}&code=${responseCode}`);
     }
@@ -185,9 +196,20 @@ exports.vnpayIPN = async (req, res) => {
 
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
     } else {
-      await Order.findByIdAndUpdate(order._id, {
-        paymentStatus: 'failed'
-      });
+      // Payment failed / Cancelled
+      if (order.paymentStatus !== 'failed') {
+        await Order.findByIdAndUpdate(order._id, {
+          paymentStatus: 'failed',
+          status: 'cancelled'
+        });
+
+        // Restore stock
+        for (const item of order.items) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { stock: item.quantity }
+          });
+        }
+      }
 
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
     }
