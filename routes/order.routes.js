@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect, authorize } = require('../middleware/auth.middleware');
 const {
   createOrder,
+  buyNow,
   getMyOrders,
   getOrderById,
   cancelOrder,
@@ -12,6 +13,11 @@ const {
 } = require('../controllers/order.controller');
 
 // User routes (require authentication)
+// @route   POST /api/orders/buy-now
+// @desc    Buy product directly from product detail page
+// @access  Private
+router.post('/buy-now', protect, buyNow);
+
 // @route   POST /api/orders
 // @desc    Create order from cart
 // @access  Private

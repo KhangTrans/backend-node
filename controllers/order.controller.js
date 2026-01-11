@@ -601,8 +601,232 @@ const getOrderStatistics = async (req, res) => {
   }
 };
 
+// Buy Now - Create order directly from product detail page
+const buyNow = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      productId,
+      quantity,
+      customerName,
+      customerEmail,
+      customerPhone,
+      shippingAddress,
+      shippingCity,
+      shippingDistrict,
+      shippingWard,
+      shippingNote,
+      paymentMethod = 'cod',
+      voucherCode
+    } = req.body;
+
+    // Validate required fields
+    if (!productId || !quantity || !customerName || !customerEmail || !customerPhone || !shippingAddress || !shippingCity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng điền đầy đủ thông tin'
+      });
+    }
+
+    // Validate quantity
+    if (quantity <= 0 || !Number.isInteger(parseInt(quantity))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Số lượng không hợp lệ'
+      });
+    }
+
+    // Get product
+    const product = await Product.findById(productId).populate({
+      path: 'images',
+      match: { isPrimary: true }
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sản phẩm không tồn tại'
+      });
+    }
+
+    // Validate stock
+    if (product.stock < quantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Sản phẩm chỉ còn ${product.stock} trong kho`
+      });
+    }
+
+    if (!product.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sản phẩm không còn khả dụng'
+      });
+    }
+
+    // Calculate subtotal
+    const subtotal = parseFloat(product.price) * quantity;
+
+    // Initialize pricing
+    let shippingFee = 30000; // Default shipping fee (30,000 VND)
+    let discount = 0;
+    let voucherId = null;
+
+    // Apply voucher if provided
+    if (voucherCode) {
+      const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
+
+      if (!voucher) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mã voucher không tồn tại'
+        });
+      }
+
+      // Validate voucher
+      if (!voucher.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voucher không còn hiệu lực'
+        });
+      }
+
+      const now = new Date();
+      if (now < voucher.startDate || now > voucher.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voucher đã hết hạn hoặc chưa đến thời gian sử dụng'
+        });
+      }
+
+      if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) {
+        return res.status(400).json({
+          success: false,
+          message: 'Voucher đã hết lượt sử dụng'
+        });
+      }
+
+      if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Voucher này không dành cho bạn'
+        });
+      }
+
+      if (subtotal < parseFloat(voucher.minOrderAmount)) {
+        return res.status(400).json({
+          success: false,
+          message: `Đơn hàng tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ để sử dụng voucher này`
+        });
+      }
+
+      // Apply voucher discount
+      voucherId = voucher._id;
+
+      if (voucher.type === 'DISCOUNT') {
+        discount = (subtotal * voucher.discountPercent) / 100;
+        if (voucher.maxDiscount) {
+          discount = Math.min(discount, parseFloat(voucher.maxDiscount));
+        }
+      } else if (voucher.type === 'FREE_SHIP') {
+        shippingFee = 0;
+      }
+    }
+
+    const total = subtotal + shippingFee - discount;
+
+    // Generate order number
+    let orderNumber;
+    let isUnique = false;
+    while (!isUnique) {
+      orderNumber = generateOrderNumber();
+      const existing = await Order.findOne({ orderNumber });
+      if (!existing) isUnique = true;
+    }
+
+    // Create order
+    const order = await Order.create({
+      orderNumber,
+      userId,
+      customerName,
+      customerEmail,
+      customerPhone,
+      shippingAddress,
+      shippingCity,
+      shippingDistrict,
+      shippingWard,
+      shippingNote,
+      paymentMethod,
+      subtotal,
+      shippingFee,
+      discount,
+      total,
+      voucherId,
+      items: [{
+        productId: product._id,
+        productName: product.name,
+        productImage: product.images[0]?.imageUrl || null,
+        price: product.price,
+        quantity,
+        subtotal: parseFloat(product.price) * quantity
+      }]
+    });
+
+    // Update product stock
+    await Product.findByIdAndUpdate(
+      product._id,
+      { $inc: { stock: -quantity } }
+    );
+
+    // Update voucher usage count
+    if (voucherId) {
+      await Voucher.findByIdAndUpdate(
+        voucherId,
+        { $inc: { usedCount: 1 } }
+      );
+    }
+
+    // Populate order
+    await order.populate([
+      {
+        path: 'items.productId'
+      },
+      {
+        path: 'voucherId'
+      }
+    ]);
+
+    // Notify admin about new order (real-time)
+    try {
+      await notifyAdmin(
+        'ORDER_CREATED',
+        'Đơn hàng mới',
+        `Đơn hàng ${order.orderNumber} từ ${customerName} (${formatPrice(order.total)})`,
+        order._id.toString()
+      );
+    } catch (notifyError) {
+      console.error('Error notifying admin:', notifyError);
+      // Don't fail the order creation if notification fails
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Mua hàng thành công',
+      data: order
+    });
+  } catch (error) {
+    console.error('Buy now error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi mua hàng',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createOrder,
+  buyNow,
   getMyOrders,
   getOrderById,
   cancelOrder,
