@@ -72,12 +72,11 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     // VNPay Sandbox sometimes expects spaces to be encoded as '+' in the hash, but '%20' in the URL.
     // However, the standard is: Hash EXACTLY what you send.
     // Let's force proper string cleaning.
-    // DEBUG: Simplify OrderInfo and IP to rule out encoding issues
-    vnp_Params['vnp_OrderInfo'] = `Thanh_toan_don_hang_${orderId}`;
+    vnp_Params['vnp_OrderInfo'] = (orderInfo || 'Thanh toan don hang');
     vnp_Params['vnp_OrderType'] = 'other';
     vnp_Params['vnp_Amount'] = Math.floor(amount * 100);
     vnp_Params['vnp_ReturnUrl'] = vnpayConfig.vnp_ReturnUrl;
-    vnp_Params['vnp_IpAddr'] = '127.0.0.1'; // Force default IP
+    vnp_Params['vnp_IpAddr'] = validIp;
     vnp_Params['vnp_CreateDate'] = createDate;
 
     // Filter out empty values
@@ -91,9 +90,12 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params = sortObject(vnp_Params);
 
     // 2. Create sign data string
-    // Use manual construction to avoid querystring library quirks with options
+    // MATCHING JAVA LOGIC: key=URLEncoded(value)
     const signData = Object.keys(vnp_Params)
-      .map(key => `${key}=${vnp_Params[key]}`)
+      .map(key => `${key}=${encodeURIComponent(vnp_Params[key]).replace(/%20/g, "+")}`) 
+      // Java's URLEncoder encodes spaces as '+' by default. 
+      // JS encodeURIComponent encodes space as '%20'.
+      // We replace %20 with + to match Java's behavior exactly if that's what VNPay wants.
       .join('&');
     
     // Log for debugging
@@ -101,7 +103,6 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     console.log("TMN Code:", vnpayConfig.vnp_TmnCode);
     console.log("Secret Length:", vnpayConfig.vnp_HashSecret ? vnpayConfig.vnp_HashSecret.length : 0);
     console.log("TxnRef:", vnp_Params['vnp_TxnRef']);
-    console.log("Amount:", vnp_Params['vnp_Amount']);
     console.log("CreateDate:", createDate);
     console.log("Raw Sign Data (for Hash):");
     console.log(signData);
