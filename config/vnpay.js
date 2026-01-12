@@ -90,9 +90,10 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params = sortObject(vnp_Params);
 
     // 2. Create sign data string
-    // Use querystring.stringify with encode: false to keep raw data (spaces, etc.)
-    // This is the most reliable way to match VNPay's expectation
-    const signData = querystring.stringify(vnp_Params, { encode: false });
+    // Use manual construction to avoid querystring library quirks with options
+    const signData = Object.keys(vnp_Params)
+      .map(key => `${key}=${vnp_Params[key]}`)
+      .join('&');
     
     // Log for debugging
     console.log("-------------------- VNPAY DEBUG --------------------");
@@ -111,8 +112,8 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_SecureHash'] = signed;
 
     // 4. Create Final URL
-    // Standard encoding for the browser URL
-    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, { encode: true });
+    // Use standard querystring stringify (it uses defaults: sep='&', eq='=', options={encodeURIComponent})
+    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, null, null, { encodeURIComponent: querystring.escape });
 
     return paymentUrl;
   } catch (error) {
