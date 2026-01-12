@@ -44,7 +44,9 @@ exports.createVNPayPayment = async (req, res) => {
     }
 
     // Get client IP
-    const ipAddr = req.headers['x-forwarded-for'] || 
+    // Get client IP
+    const forwardedIps = req.headers['x-forwarded-for']?.split(',').map(ip => ip.trim());
+    const ipAddr = forwardedIps?.[0] || 
                    req.connection.remoteAddress || 
                    req.socket.remoteAddress ||
                    req.ip ||
