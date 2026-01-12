@@ -44,10 +44,10 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     }
 
     // Use Vietnam Time (GMT+7)
-    // Render servers are UTC, so we must add 7 hours manually or use locale string
     const date = new Date();
-    date.setHours(date.getHours() + 7);
-    const createDate = formatDate(date);
+    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+    const date_vn = new Date(utc + (7 * 3600000));
+    const createDate = formatDate(date_vn);
     
     // Ensure IP is valid or default to 127.0.0.1
     const validIp = (ipAddr && ipAddr.length > 6) ? ipAddr : '127.0.0.1';
