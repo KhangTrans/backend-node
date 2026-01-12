@@ -186,11 +186,7 @@ const initializeSocket = (server) => {
   return io;
 };
 
-// Helper function query admin
-const User = require('../models/User.model');
-const Notification = require('../models/Notification.model');
 
-// ... (existing code for initializeSocket)
 
 // Helper function để tạo notification
 const createNotification = async (userId, type, title, message, orderId = null) => {
