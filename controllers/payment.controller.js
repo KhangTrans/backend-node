@@ -115,7 +115,7 @@ exports.vnpayReturn = async (req, res) => {
       // Update Order Status
       const updateResult = await Order.findByIdAndUpdate(order._id, {
         paymentStatus: 'paid',
-        orderStatus: 'processing',
+        orderStatus: 'pending',
         paidAt: new Date(),
         transactionId: transactionNo
       }, { new: true });
