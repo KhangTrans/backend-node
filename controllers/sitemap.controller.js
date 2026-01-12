@@ -53,7 +53,7 @@ exports.generateSitemap = async (req, res) => {
 // @access  Public
 exports.generateRobotsTxt = async (req, res) => {
   try {
-    const baseUrl = process.env.API_URL || 'https://backend-node-lilac-seven.vercel.app';
+    const baseUrl = process.env.API_URL || 'https://backend-node-5re9.onrender.com';
     
     let txt = 'User-agent: *\n';
     txt += 'Allow: /\n';

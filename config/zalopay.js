@@ -7,7 +7,8 @@ const zalopayConfig = {
   key1: process.env.ZALOPAY_KEY1,
   key2: process.env.ZALOPAY_KEY2,
   endpoint: process.env.ZALOPAY_ENDPOINT || 'https://sb-openapi.zalopay.vn/v2/create',
-  callback_url: process.env.ZALOPAY_CALLBACK_URL || 'http://localhost:5000/api/payment/zalopay/callback'
+
+  callback_url: process.env.ZALOPAY_CALLBACK_URL || 'https://backend-node-5re9.onrender.com/api/payment/zalopay/callback'
 };
 
 /**
@@ -25,7 +26,7 @@ async function createOrder(orderId, amount, orderInfo, items = []) {
       app_time: Date.now(),
       item: JSON.stringify(items),
       embed_data: JSON.stringify({
-        redirecturl: process.env.ZALOPAY_RETURN_URL || 'http://localhost:5173/payment/zalopay/return',
+        redirecturl: process.env.ZALOPAY_RETURN_URL || 'https://khangtrandev.id.vn/payment/zalopay/return',
         orderId: orderId
       }),
       amount: amount,
