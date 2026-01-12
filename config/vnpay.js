@@ -136,9 +136,10 @@ function verifyReturnUrl(vnp_Params) {
 
     vnp_Params = sortObject(vnp_Params);
 
-    // Create query string for verification (MANUAL ITERATION for consistency)
+    // Create query string for verification (Using same logic as createPaymentUrl)
+    // MATCHING JAVA LOGIC: key=URLEncoded(value)
     const signData = Object.keys(vnp_Params)
-      .map(key => `${key}=${vnp_Params[key]}`)
+      .map(key => `${key}=${encodeURIComponent(vnp_Params[key]).replace(/%20/g, "+")}`)
       .join('&');
     
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
