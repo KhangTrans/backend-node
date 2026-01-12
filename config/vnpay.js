@@ -43,11 +43,6 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
       throw new Error("Missing VNPay configuration (vnp_TmnCode or vnp_HashSecret)");
     }
 
-    // FORCE HARDCODE CREDENTIALS (Bypass Render Env Persistence Issues)
-    const tmnCode = 'TWAPOHRH';
-    const secretKey = 'RT0UBKYFBJX8B56RH7WUJJO8EICZRUAF';
-    const returnUrl = 'https://khangtrandev.id.vn/payment/vnpay/return';
-
     // Use Vietnam Time (GMT+7)
     // Render servers are UTC, so we must add 7 hours manually or use locale string
     const date = new Date();
@@ -66,14 +61,14 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     let vnp_Params = {};
     vnp_Params['vnp_Version'] = '2.1.0';
     vnp_Params['vnp_Command'] = 'pay';
-    vnp_Params['vnp_TmnCode'] = tmnCode;
+    vnp_Params['vnp_TmnCode'] = vnpayConfig.vnp_TmnCode;
     vnp_Params['vnp_Locale'] = locale;
     vnp_Params['vnp_CurrCode'] = 'VND';
     vnp_Params['vnp_TxnRef'] = orderId;
     vnp_Params['vnp_OrderInfo'] = cleanOrderInfo;
     vnp_Params['vnp_OrderType'] = 'other';
     vnp_Params['vnp_Amount'] = Math.floor(amount * 100);
-    vnp_Params['vnp_ReturnUrl'] = returnUrl;
+    vnp_Params['vnp_ReturnUrl'] = vnpayConfig.vnp_ReturnUrl;
     vnp_Params['vnp_IpAddr'] = validIp;
     vnp_Params['vnp_CreateDate'] = createDate;
 
@@ -101,7 +96,7 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     console.log("SignData (Raw):", signData);
     console.log("-----------------------------------------------------");
 
-    const hmac = crypto.createHmac("sha512", secretKey);
+    const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
