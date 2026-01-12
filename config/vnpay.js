@@ -72,7 +72,7 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     // VNPay Sandbox sometimes expects spaces to be encoded as '+' in the hash, but '%20' in the URL.
     // However, the standard is: Hash EXACTLY what you send.
     // Let's force proper string cleaning.
-    vnp_Params['vnp_OrderInfo'] = (orderInfo || 'Thanh toan don hang').replace(/ /g, '+');
+    vnp_Params['vnp_OrderInfo'] = (orderInfo || 'Thanh toan don hang');
     vnp_Params['vnp_OrderType'] = 'other';
     vnp_Params['vnp_Amount'] = Math.floor(amount * 100);
     vnp_Params['vnp_ReturnUrl'] = vnpayConfig.vnp_ReturnUrl;
@@ -86,16 +86,13 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
       }
     });
 
-    // 1. Sort the object to prepare for URL creation
+    // 1. Sort the object (Standard VNPay requirement)
     vnp_Params = sortObject(vnp_Params);
 
-    // 2. Create sign data string (Paranoid Mode)
-    // VNPay requires keys to be sorted alphabetically
-    // We explicitly sort keys again to be 100% sure
-    const signData = Object.keys(vnp_Params)
-      .sort()
-      .map(key => `${key}=${vnp_Params[key]}`)
-      .join('&');
+    // 2. Create sign data string
+    // Use querystring.stringify with encode: false to keep raw data (spaces, etc.)
+    // This is the most reliable way to match VNPay's expectation
+    const signData = querystring.stringify(vnp_Params, { encode: false });
     
     // Log for debugging
     console.log("-------------------- VNPAY DEBUG --------------------");
@@ -104,7 +101,7 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     console.log("TxnRef:", vnp_Params['vnp_TxnRef']);
     console.log("Amount:", vnp_Params['vnp_Amount']);
     console.log("CreateDate:", createDate);
-    console.log("RAW SIGN DATA (Check this against VNPay Sandbox):");
+    console.log("Raw Sign Data (for Hash):");
     console.log(signData);
     console.log("-----------------------------------------------------");
 
@@ -114,8 +111,8 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_SecureHash'] = signed;
 
     // 4. Create Final URL
-    // Use encodeURIComponent to ensure correct encoding for the browser
-    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, null, null, { encodeURIComponent: querystring.escape });
+    // Standard encoding for the browser URL
+    const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, { encode: true });
 
     return paymentUrl;
   } catch (error) {
