@@ -77,29 +77,41 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_CreateDate'] = createDate;
 
     // Filter out empty values
+    Object.keys(vnp_Params).forEach(key => {
+      if (vnp_Params[key] === null || vnp_Params[key] === undefined || vnp_Params[key] === '') {
+        delete vnp_Params[key];
+      }
+    });
+
+    // 1. Sort the object to prepare for URL creation
     vnp_Params = sortObject(vnp_Params);
 
-    // Create sign data using querystring manually to ensure consistency
-    // Standard Node.js VNPay Implementation:
-    // 1. Sort object (done)
-    // 2. Use 'qs' or manual concatenation with encoded spaces -> '+' OR raw spaces
-    // VNPay Sandbox is inconsistent. Best bet: Raw values for hash, Encoded values for URL.
-    
+    // 2. Create sign data string (Paranoid Mode)
+    // VNPay requires keys to be sorted alphabetically
+    // We explicitly sort keys again to be 100% sure
     const signData = Object.keys(vnp_Params)
+      .sort()
       .map(key => `${key}=${vnp_Params[key]}`)
       .join('&');
     
     // Log for debugging
     console.log("-------------------- VNPAY DEBUG --------------------");
+    console.log("TMN Code:", vnpayConfig.vnp_TmnCode);
+    console.log("Secret Length:", vnpayConfig.vnp_HashSecret ? vnpayConfig.vnp_HashSecret.length : 0);
+    console.log("TxnRef:", vnp_Params['vnp_TxnRef']);
+    console.log("Amount:", vnp_Params['vnp_Amount']);
     console.log("CreateDate:", createDate);
-    console.log("SignData:", signData);
+    console.log("RAW SIGN DATA (Check this against VNPay Sandbox):");
+    console.log(signData);
     console.log("-----------------------------------------------------");
 
+    // 3. Hash
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
-    // Create payment URL
+    // 4. Create Final URL
+    // Use encodeURIComponent to ensure correct encoding for the browser
     const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, null, null, { encodeURIComponent: querystring.escape });
 
     return paymentUrl;
