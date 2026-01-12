@@ -110,13 +110,7 @@ exports.vnpayReturn = async (req, res) => {
     }
 
     if (responseCode === '00') {
-      // Payment success
-      await Order.findByIdAndUpdate(order._id, {
-        paymentStatus: 'paid',
-        status: 'confirmed',
-        paidAt: new Date(),
-        transactionId: transactionNo
-      });
+
 
       // Clear cart on success
       await Cart.findOneAndUpdate(
@@ -186,7 +180,7 @@ exports.vnpayIPN = async (req, res) => {
       // Update order
       await Order.findByIdAndUpdate(order._id, {
         paymentStatus: 'paid',
-        status: 'confirmed',
+        status: 'processing',
         paidAt: new Date()
       });
 
@@ -347,7 +341,7 @@ exports.zaloPayCallback = async (req, res) => {
         } else {
           await Order.findByIdAndUpdate(orderId, {
             paymentStatus: 'paid',
-            status: 'confirmed',
+            status: 'processing',
             paidAt: new Date(),
             transactionId: dataJson.app_trans_id
           });
