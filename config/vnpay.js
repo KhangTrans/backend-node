@@ -72,11 +72,12 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     // VNPay Sandbox sometimes expects spaces to be encoded as '+' in the hash, but '%20' in the URL.
     // However, the standard is: Hash EXACTLY what you send.
     // Let's force proper string cleaning.
-    vnp_Params['vnp_OrderInfo'] = (orderInfo || 'Thanh toan don hang');
+    // DEBUG: Simplify OrderInfo and IP to rule out encoding issues
+    vnp_Params['vnp_OrderInfo'] = `Thanh_toan_don_hang_${orderId}`;
     vnp_Params['vnp_OrderType'] = 'other';
     vnp_Params['vnp_Amount'] = Math.floor(amount * 100);
     vnp_Params['vnp_ReturnUrl'] = vnpayConfig.vnp_ReturnUrl;
-    vnp_Params['vnp_IpAddr'] = validIp;
+    vnp_Params['vnp_IpAddr'] = '127.0.0.1'; // Force default IP
     vnp_Params['vnp_CreateDate'] = createDate;
 
     // Filter out empty values
