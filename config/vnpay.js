@@ -109,7 +109,9 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     console.log("-----------------------------------------------------");
 
     // 3. Hash
-    const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
+    // DEBUG: Force hardcode the secret key to rule out ENV issues
+    const secretKey = 'RT0UBKYFBJX8B56RH7WUJJO8EICZRUAF'; 
+    const hmac = crypto.createHmac("sha512", secretKey);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
