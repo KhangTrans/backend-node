@@ -110,7 +110,17 @@ exports.vnpayReturn = async (req, res) => {
     }
 
     if (responseCode === '00') {
-
+      console.log(`[VNPay Return] Payment successful for order ${orderId}. Updating status...`);
+      
+      // Update Order Status
+      const updateResult = await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'paid',
+        orderStatus: 'processing',
+        paidAt: new Date(),
+        transactionId: transactionNo
+      }, { new: true });
+      
+      console.log(`[VNPay Return] Update result: ${updateResult.paymentStatus}`);
 
       // Clear cart on success
       await Cart.findOneAndUpdate(
