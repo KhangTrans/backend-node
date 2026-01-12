@@ -43,20 +43,24 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
       throw new Error("Missing VNPay configuration (vnp_TmnCode or vnp_HashSecret)");
     }
 
-    // Use Vietnam Time (GMT+7)
-    const date = new Date();
-    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-    const date_vn = new Date(utc + (7 * 3600000));
-    const createDate = formatDate(date_vn);
+    // Use Vietnam Time (GMT+7) - Robust Method
+    // 1. Get current UTC time
+    // 2. Add 7 hours (in ms)
+    // 3. Use getUTC* methods to extract the parts (pretending the shifted time is UTC)
+    const t = new Date();
+    const utcTime = t.getTime() + (t.getTimezoneOffset() * 60000);
+    const vnTime = new Date(utcTime + (7 * 3600000));
+
+    const yyyy = vnTime.getUTCFullYear();
+    const mm = String(vnTime.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(vnTime.getUTCDate()).padStart(2, '0');
+    const HH = String(vnTime.getUTCHours()).padStart(2, '0');
+    const MM = String(vnTime.getUTCMinutes()).padStart(2, '0');
+    const ss = String(vnTime.getUTCSeconds()).padStart(2, '0');
+    const createDate = `${yyyy}${mm}${dd}${HH}${MM}${ss}`;
     
     // Ensure IP is valid or default to 127.0.0.1
     const validIp = (ipAddr && ipAddr.length > 6) ? ipAddr : '127.0.0.1';
-
-    // TEST: Remove Order Info spaces to rule out Encoding mismatches
-    let cleanOrderInfo = 'ThanhToanTest';
-    // if (orderInfo) {
-    //  cleanOrderInfo = orderInfo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
-    // }
 
     let vnp_Params = {};
     vnp_Params['vnp_Version'] = '2.1.0';
@@ -65,7 +69,7 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_Locale'] = locale;
     vnp_Params['vnp_CurrCode'] = 'VND';
     vnp_Params['vnp_TxnRef'] = orderId;
-    vnp_Params['vnp_OrderInfo'] = cleanOrderInfo;
+    vnp_Params['vnp_OrderInfo'] = orderInfo || 'Thanh toan don hang';
     vnp_Params['vnp_OrderType'] = 'other';
     vnp_Params['vnp_Amount'] = Math.floor(amount * 100);
     vnp_Params['vnp_ReturnUrl'] = vnpayConfig.vnp_ReturnUrl;
@@ -73,34 +77,29 @@ function createPaymentUrl(orderId, amount, orderInfo, ipAddr, locale = 'vn') {
     vnp_Params['vnp_CreateDate'] = createDate;
 
     // Filter out empty values
-    Object.keys(vnp_Params).forEach(key => {
-      if (vnp_Params[key] === null || vnp_Params[key] === undefined || vnp_Params[key] === '') {
-        delete vnp_Params[key];
-      }
-    });
-
-    // Sort parameters (Although sortObject does this, we sort keys explicitly below for signing)
     vnp_Params = sortObject(vnp_Params);
 
-    // Create query string for signing (MANUAL ITERATION + FORCE SORT)
+    // Create sign data using querystring manually to ensure consistency
+    // Standard Node.js VNPay Implementation:
+    // 1. Sort object (done)
+    // 2. Use 'qs' or manual concatenation with encoded spaces -> '+' OR raw spaces
+    // VNPay Sandbox is inconsistent. Best bet: Raw values for hash, Encoded values for URL.
+    
     const signData = Object.keys(vnp_Params)
-      .sort() // FORCE SORT to match VNPay requirements 100%
       .map(key => `${key}=${vnp_Params[key]}`)
       .join('&');
     
-    // Log for debugging (CRITICAL: Check server logs for this)
+    // Log for debugging
     console.log("-------------------- VNPAY DEBUG --------------------");
     console.log("CreateDate:", createDate);
-    console.log("OrderId:", orderId);
-    console.log("Amount (x100):", vnp_Params['vnp_Amount']);
-    console.log("SignData (Raw):", signData);
+    console.log("SignData:", signData);
     console.log("-----------------------------------------------------");
 
     const hmac = crypto.createHmac("sha512", vnpayConfig.vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
     vnp_Params['vnp_SecureHash'] = signed;
 
-    // Create payment URL (standard encoding for the browser)
+    // Create payment URL
     const paymentUrl = vnpayConfig.vnp_Url + '?' + querystring.stringify(vnp_Params, null, null, { encodeURIComponent: querystring.escape });
 
     return paymentUrl;
