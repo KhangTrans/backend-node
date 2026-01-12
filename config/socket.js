@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.model');
+const Notification = require('../models/Notification.model');
 
 let io;
 
@@ -185,13 +186,22 @@ const initializeSocket = (server) => {
   return io;
 };
 
+// Helper function query admin
+const User = require('../models/User.model');
+const Notification = require('../models/Notification.model');
+
+// ... (existing code for initializeSocket)
+
 // Helper function để tạo notification
 const createNotification = async (userId, type, title, message, orderId = null) => {
   try {
-    // const notification = await prisma.notification.create({...});
-    const notification = {
-        userId, type, title, message, orderId, createdAt: new Date()
-    };
+    const notification = await Notification.create({
+      userId,
+      type,
+      title,
+      message,
+      orderId
+    });
 
     // Gửi real-time notification cho user
     const socketId = userSockets.get(userId);
@@ -202,7 +212,8 @@ const createNotification = async (userId, type, title, message, orderId = null) 
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
-    throw error;
+    // Don't throw error to prevent crashing main flow
+    return null; 
   }
 };
 
@@ -210,19 +221,29 @@ const createNotification = async (userId, type, title, message, orderId = null) 
 const notifyAdmin = async (type, title, message, orderId = null) => {
   try {
     // Lấy tất cả admin users
-    // const admins = await prisma.user.findMany({...});
-    // For now, skip admin notification DB persistence
-    const notifications = [];
+    const admins = await User.find({ role: 'admin', isActive: true }).select('_id');
+
+    if (!admins.length) return [];
+
+    // Tạo notifications cho tất cả admin
+    const notifications = await Promise.all(
+      admins.map((admin) =>
+        createNotification(admin._id.toString(), type, title, message, orderId)
+      )
+    );
 
     // Gửi real-time notification cho admin room
-    if (io) {
+    // Note: createNotification already sends individual socket events
+    // But we also broadcast to 'admin' room if needed
+    if (io && notifications.length > 0 && notifications[0]) {
       io.to('admin').emit('new_notification', notifications[0]);
     }
 
     return notifications;
   } catch (error) {
     console.error('Error notifying admin:', error);
-    throw error;
+     // Don't throw error to prevent crashing main flow
+    return [];
   }
 };
 
