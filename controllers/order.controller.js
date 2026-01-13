@@ -393,7 +393,7 @@ const cancelOrder = async (req, res) => {
 // Admin: Get all orders
 const getAllOrders = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20, search } = req.query;
+    const { status, page = 1, limit = 20, search, paymentMethod } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -401,6 +401,19 @@ const getAllOrders = async (req, res) => {
     if (status) {
       filter.orderStatus = status;
     }
+    if (paymentMethod) {
+      let methods;
+      // Handle case where multiple params are passed (e.g., ?paymentMethod=cod&paymentMethod=vnpay)
+      if (Array.isArray(paymentMethod)) {
+        methods = paymentMethod;
+      } else {
+        // Handle comma-separated string (e.g., ?paymentMethod=cod,vnpay)
+        methods = paymentMethod.split(',').map(m => m.trim());
+      }
+      filter.paymentMethod = { $in: methods };
+    }
+    
+    console.log('Get all orders filter:', JSON.stringify(filter, null, 2));
     if (search) {
       filter.$or = [
         { orderNumber: { $regex: search, $options: 'i' } },
