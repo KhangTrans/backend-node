@@ -87,64 +87,44 @@ const createOrder = async (req, res) => {
     let discount = 0;
     let voucherId = null;
 
-    // Apply voucher if provided
-    if (voucherCode) {
-      const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
+    // Apply voucher(s)
+    let discountVoucherId = null;
+    let shippingVoucherId = null;
 
-      if (!voucher) {
-        return res.status(400).json({
-          success: false,
-          message: 'Mã voucher không tồn tại'
-        });
+    if (voucherCode || req.body.voucherCodes) {
+      let codes = [];
+      if (req.body.voucherCodes && Array.isArray(req.body.voucherCodes)) {
+        codes = req.body.voucherCodes;
+      } else if (voucherCode) {
+        codes = [voucherCode];
       }
 
-      // Validate voucher
-      if (!voucher.isActive) {
-        return res.status(400).json({
-          success: false,
-          message: 'Voucher không còn hiệu lực'
-        });
-      }
+      for (const code of codes) {
+        const voucher = await Voucher.findOne({ code: code.toUpperCase() });
 
-      const now = new Date();
-      if (now < voucher.startDate || now > voucher.endDate) {
-        return res.status(400).json({
-          success: false,
-          message: 'Voucher đã hết hạn hoặc chưa đến thời gian sử dụng'
-        });
-      }
+        if (!voucher) continue; // Skip if not found
 
-      if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) {
-        return res.status(400).json({
-          success: false,
-          message: 'Voucher đã hết lượt sử dụng'
-        });
-      }
+        // Basic Validate logic (Active, date, usage, user, min amount)
+        if (!voucher.isActive) continue;
+        
+        const now = new Date();
+        if (now < voucher.startDate || now > voucher.endDate) continue;
+        if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) continue;
+        if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) continue;
+        if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
 
-      if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) {
-        return res.status(403).json({
-          success: false,
-          message: 'Voucher này không dành cho bạn'
-        });
-      }
-
-      if (subtotal < parseFloat(voucher.minOrderAmount)) {
-        return res.status(400).json({
-          success: false,
-          message: `Đơn hàng tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ để sử dụng voucher này`
-        });
-      }
-
-      // Apply voucher discount
-      voucherId = voucher._id;
-      
-      if (voucher.type === 'DISCOUNT') {
-        discount = (subtotal * voucher.discountPercent) / 100;
-        if (voucher.maxDiscount) {
-          discount = Math.min(discount, parseFloat(voucher.maxDiscount));
+        // Apply
+        if (voucher.type === 'DISCOUNT' && !discountVoucherId) {
+          discountVoucherId = voucher._id;
+          let d = (subtotal * voucher.discountPercent) / 100;
+          if (voucher.maxDiscount) {
+            d = Math.min(d, parseFloat(voucher.maxDiscount));
+          }
+          discount += d;
+        } else if (voucher.type === 'FREE_SHIP' && !shippingVoucherId) {
+          shippingVoucherId = voucher._id;
+          shippingFee = 0;
         }
-      } else if (voucher.type === 'FREE_SHIP') {
-        shippingFee = 0;
       }
     }
 
@@ -176,7 +156,9 @@ const createOrder = async (req, res) => {
       shippingFee,
       discount,
       total,
-      voucherId,
+      total,
+      discountVoucherId,
+      shippingVoucherId,
       items: cart.items.map(item => ({
         productId: item.productId._id,
         productName: item.productId.name,
@@ -196,11 +178,11 @@ const createOrder = async (req, res) => {
     }
 
     // Update voucher usage count
-    if (voucherId) {
-      await Voucher.findByIdAndUpdate(
-        voucherId,
-        { $inc: { usedCount: 1 } }
-      );
+    if (discountVoucherId) {
+      await Voucher.findByIdAndUpdate(discountVoucherId, { $inc: { usedCount: 1 } });
+    }
+    if (shippingVoucherId) {
+      await Voucher.findByIdAndUpdate(shippingVoucherId, { $inc: { usedCount: 1 } });
     }
 
     // Clear cart ONLY if COD (For Online Payment, clear after success in payment.controller)
@@ -211,12 +193,9 @@ const createOrder = async (req, res) => {
 
     // Populate order
     await order.populate([
-      {
-        path: 'items.productId'
-      },
-      {
-        path: 'voucherId'
-      }
+      { path: 'items.productId' },
+      { path: 'discountVoucherId' },
+      { path: 'shippingVoucherId' }
     ]);
 
     // Notify admin about new order (real-time)
@@ -263,7 +242,8 @@ const getMyOrders = async (req, res) => {
     const [orders, total] = await Promise.all([
       Order.find(filter)
         .populate('items.productId')
-        .populate('voucherId')
+        .populate('discountVoucherId')
+        .populate('shippingVoucherId')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -298,7 +278,8 @@ const getOrderById = async (req, res) => {
 
     const order = await Order.findById(orderId)
       .populate('items.productId')
-      .populate('voucherId');
+      .populate('discountVoucherId')
+      .populate('shippingVoucherId');
 
     if (!order) {
       return res.status(404).json({
@@ -430,7 +411,8 @@ const getAllOrders = async (req, res) => {
           path: 'userId',
           select: '_id username email'
         })
-        .populate('voucherId')
+        .populate('discountVoucherId')
+        .populate('shippingVoucherId')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -803,12 +785,9 @@ const buyNow = async (req, res) => {
 
     // Populate order
     await order.populate([
-      {
-        path: 'items.productId'
-      },
-      {
-        path: 'voucherId'
-      }
+      { path: 'items.productId' },
+      { path: 'discountVoucherId' },
+      { path: 'shippingVoucherId' }
     ]);
 
     // Notify admin about new order (real-time)
