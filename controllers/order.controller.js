@@ -33,7 +33,7 @@ const createOrder = async (req, res) => {
       shippingWard,
       shippingNote,
       paymentMethod = 'cod',
-      voucherCode
+      voucherIds // Changed from voucherCode to voucherIds
     } = req.body;
 
     // Validate required fields
@@ -91,39 +91,37 @@ const createOrder = async (req, res) => {
     let discountVoucherId = null;
     let shippingVoucherId = null;
 
-    if (voucherCode || req.body.voucherCodes) {
-      let codes = [];
-      if (req.body.voucherCodes && Array.isArray(req.body.voucherCodes)) {
-        codes = req.body.voucherCodes;
-      } else if (voucherCode) {
-        codes = [voucherCode];
-      }
+    if (voucherIds && Array.isArray(voucherIds) && voucherIds.length > 0) {
+      for (const vId of voucherIds) {
+        try {
+          const voucher = await Voucher.findById(vId);
 
-      for (const code of codes) {
-        const voucher = await Voucher.findOne({ code: code.toUpperCase() });
+          if (!voucher) continue;
 
-        if (!voucher) continue; // Skip if not found
+          // Basic Validate logic
+          if (!voucher.isActive) continue;
+          
+          const now = new Date();
+          if (now < voucher.startDate || now > voucher.endDate) continue;
+          if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) continue;
+          if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) continue;
+          if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
 
-        // Basic Validate logic (Active, date, usage, user, min amount)
-        if (!voucher.isActive) continue;
-        
-        const now = new Date();
-        if (now < voucher.startDate || now > voucher.endDate) continue;
-        if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) continue;
-        if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) continue;
-        if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
-
-        // Apply
-        if (voucher.type === 'DISCOUNT' && !discountVoucherId) {
-          discountVoucherId = voucher._id;
-          let d = (subtotal * voucher.discountPercent) / 100;
-          if (voucher.maxDiscount) {
-            d = Math.min(d, parseFloat(voucher.maxDiscount));
+          // Apply
+          if (voucher.type === 'DISCOUNT' && !discountVoucherId) {
+            discountVoucherId = voucher._id;
+            let d = (subtotal * voucher.discountPercent) / 100;
+            if (voucher.maxDiscount) {
+              d = Math.min(d, parseFloat(voucher.maxDiscount));
+            }
+            discount += d;
+          } else if (voucher.type === 'FREE_SHIP' && !shippingVoucherId) {
+            shippingVoucherId = voucher._id;
+            shippingFee = 0;
           }
-          discount += d;
-        } else if (voucher.type === 'FREE_SHIP' && !shippingVoucherId) {
-          shippingVoucherId = voucher._id;
-          shippingFee = 0;
+        } catch (err) {
+            // Ignore invalid IDs silently or log them
+            console.log('Error applying voucher id:', vId, err.message);
         }
       }
     }
