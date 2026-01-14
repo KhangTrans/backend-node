@@ -4,12 +4,19 @@ const User = require('../models/User.model');
 // Get all vouchers (admin)
 const getAllVouchers = async (req, res) => {
   try {
-    const { type, isActive, page = 1, limit = 20 } = req.query;
+    const { type, isActive, search, page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
 
     const where = {};
     if (type) where.type = type;
     if (isActive !== undefined) where.isActive = isActive === 'true';
+
+    if (search) {
+      where.$or = [
+        { code: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
 
     const [vouchers, total] = await Promise.all([
       Voucher.find(where)
