@@ -120,126 +120,124 @@ const getVoucherById = async (req, res) => {
   }
 };
 
-// Validate and check voucher
+// Validate and check voucher(s)
 const validateVoucher = async (req, res) => {
   try {
-    const { code, orderAmount } = req.body;
+    const { code, codes, orderAmount } = req.body; // Support single 'code' or array 'codes'
     const userId = req.user.id;
+    const amount = parseFloat(orderAmount) || 0;
 
-    if (!code) {
+    let voucherCodes = [];
+    if (codes && Array.isArray(codes)) {
+      voucherCodes = codes;
+    } else if (code) {
+      voucherCodes = [code];
+    }
+
+    if (voucherCodes.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Vui lòng nhập mã voucher'
       });
     }
 
-    // Find voucher
-    const voucher = await Voucher.findOne({ code: code.toUpperCase() });
-
-    if (!voucher) {
-      return res.status(404).json({
-        success: false,
-        message: 'Mã voucher không tồn tại'
-      });
-    }
-
-    // Check if voucher is active
-    if (!voucher.isActive) {
+    if (voucherCodes.length > 2) {
       return res.status(400).json({
         success: false,
-        message: 'Voucher không còn hiệu lực'
+        message: 'Chỉ được phép sử dụng tối đa 2 voucher'
       });
     }
 
-    // Check date validity
-    const now = new Date();
-    if (now < voucher.startDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Voucher chưa đến thời gian sử dụng'
-      });
-    }
-    if (now > voucher.endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Voucher đã hết hạn'
-      });
-    }
+    const results = [];
+    let discountVoucher = null;
+    let shippingVoucher = null;
+    let totalDiscount = 0;
+    let isFreeShip = false;
 
-    // Check usage limit
-    if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) {
-      return res.status(400).json({
-        success: false,
-        message: 'Voucher đã hết lượt sử dụng'
-      });
-    }
+    for (const voucherCode of voucherCodes) {
+      // Find voucher
+      const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
 
-    // Check user restriction
-    if (voucher.userId !== null && voucher.userId.toString() !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Voucher này không dành cho bạn'
-      });
-    }
-
-    // Check if user has already used this voucher
-    const Order = require('../models/Order.model');
-    const usedOrder = await Order.findOne({
-      userId: userId,
-      voucherId: voucher._id,
-      orderStatus: { $ne: 'cancelled' }, // Ignore cancelled orders
-      paymentStatus: { $ne: 'failed' }   // Ignore failed payments
-    });
-
-    if (usedOrder) {
-      return res.status(400).json({
-        success: false,
-        message: 'Bạn đã sử dụng voucher này rồi'
-      });
-    }
-
-    // Check minimum order amount
-    const amount = parseFloat(orderAmount) || 0;
-    if (amount < parseFloat(voucher.minOrderAmount)) {
-      return res.status(400).json({
-        success: false,
-        message: `Đơn hàng tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ để sử dụng voucher này`
-      });
-    }
-
-    // Calculate discount
-    let discount = 0;
-    let freeShip = false;
-
-    if (voucher.type === 'DISCOUNT') {
-      discount = (amount * voucher.discountPercent) / 100;
-      if (voucher.maxDiscount) {
-        discount = Math.min(discount, parseFloat(voucher.maxDiscount));
+      if (!voucher) {
+        return res.status(404).json({
+          success: false,
+          message: `Mã voucher '${voucherCode}' không tồn tại`
+        });
       }
-    } else if (voucher.type === 'FREE_SHIP') {
-      freeShip = true;
+
+      // Basic validations
+      if (!voucher.isActive) throw new Error(`Voucher '${voucher.code}' không còn hiệu lực`);
+      
+      const now = new Date();
+      if (now < voucher.startDate) throw new Error(`Voucher '${voucher.code}' chưa đến thời gian sử dụng`);
+      if (now > voucher.endDate) throw new Error(`Voucher '${voucher.code}' đã hết hạn`);
+      if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) throw new Error(`Voucher '${voucher.code}' đã hết lượt sử dụng`);
+      
+      // User restriction
+      if (voucher.userId !== null && voucher.userId.toString() !== userId) throw new Error(`Voucher '${voucher.code}' không dành cho bạn`);
+
+      // Min order amount
+      if (amount < parseFloat(voucher.minOrderAmount)) throw new Error(`Voucher '${voucher.code}' yêu cầu đơn tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ`);
+
+      // Check usage history
+      const Order = require('../models/Order.model');
+      const usedOrder = await Order.findOne({
+        userId: userId,
+        $or: [
+            { discountVoucherId: voucher._id },
+            { shippingVoucherId: voucher._id }
+        ],
+        orderStatus: { $ne: 'cancelled' },
+        paymentStatus: { $ne: 'failed' }
+      });
+
+      if (usedOrder) throw new Error(`Bạn đã sử dụng voucher '${voucher.code}' rồi`);
+
+      // Assign to slots
+      if (voucher.type === 'DISCOUNT') {
+        if (discountVoucher) throw new Error('Chỉ được sử dụng 1 voucher giảm giá đơn hàng');
+        discountVoucher = voucher;
+      } else if (voucher.type === 'FREE_SHIP') {
+        if (shippingVoucher) throw new Error('Chỉ được sử dụng 1 voucher miễn phí vận chuyển');
+        shippingVoucher = voucher;
+      }
+      
+      results.push(voucher);
+    }
+
+    // Calculate benefits
+    if (discountVoucher) {
+      let discount = (amount * discountVoucher.discountPercent) / 100;
+      if (discountVoucher.maxDiscount) {
+        discount = Math.min(discount, parseFloat(discountVoucher.maxDiscount));
+      }
+      totalDiscount += discount;
+    }
+
+    if (shippingVoucher) {
+      isFreeShip = true;
     }
 
     res.json({
       success: true,
       message: 'Voucher hợp lệ',
       data: {
-        voucher: {
-          id: voucher.id,
-          code: voucher.code,
-          type: voucher.type,
-          description: voucher.description
-        },
-        discount,
-        freeShip
+        vouchers: results.map(v => ({
+            id: v.id,
+            code: v.code,
+            type: v.type,
+            description: v.description
+        })),
+        totalDiscount,
+        freeShip: isFreeShip
       }
     });
+
   } catch (error) {
     console.error('Validate voucher error:', error);
-    res.status(500).json({
+    res.status(400).json({ // Changed to 400 for logic errors
       success: false,
-      message: 'Lỗi khi kiểm tra voucher',
-      error: error.message
+      message: error.message || 'Lỗi kiểm tra voucher',
     });
   }
 };
@@ -445,7 +443,12 @@ const deleteVoucher = async (req, res) => {
 
     // Check if voucher is used in orders - need to import Order model
     const Order = require('../models/Order.model');
-    const orderCount = await Order.countDocuments({ voucherId: voucherId });
+    const orderCount = await Order.countDocuments({
+      $or: [
+        { discountVoucherId: voucherId },
+        { shippingVoucherId: voucherId }
+      ]
+    });
 
     if (orderCount > 0) {
       return res.status(400).json({
@@ -585,7 +588,10 @@ const collectVoucher = async (req, res) => {
     const Order = require('../models/Order.model');
     const usedOrder = await Order.findOne({
       userId: userId,
-      voucherId: voucher._id,
+      $or: [
+        { discountVoucherId: voucher._id },
+        { shippingVoucherId: voucher._id }
+      ],
       orderStatus: { $ne: 'cancelled' },
       paymentStatus: { $ne: 'failed' }
     });

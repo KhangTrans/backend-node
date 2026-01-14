@@ -44,7 +44,11 @@ const orderSchema = new mongoose.Schema({
     unique: true,
     maxlength: 50
   },
-  voucherId: {
+  discountVoucherId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Voucher'
+  },
+  shippingVoucherId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Voucher'
   },
@@ -139,7 +143,8 @@ const orderSchema = new mongoose.Schema({
 
 // Indexes
 orderSchema.index({ userId: 1 });
-orderSchema.index({ voucherId: 1 });
+orderSchema.index({ discountVoucherId: 1 });
+orderSchema.index({ shippingVoucherId: 1 });
 orderSchema.index({ orderNumber: 1 });
 orderSchema.index({ orderStatus: 1 });
 orderSchema.index({ createdAt: -1 });
