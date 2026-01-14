@@ -13,7 +13,7 @@ const getAllVouchers = async (req, res) => {
 
     const [vouchers, total] = await Promise.all([
       Voucher.find(where)
-        .populate('user', 'id username email')
+        .populate('userId', 'id username email')
         .sort({ createdAt: -1 })
         .skip(parseInt(skip))
         .limit(parseInt(limit)),
@@ -81,7 +81,7 @@ const getVoucherById = async (req, res) => {
   try {
     const { voucherId } = req.params;
 
-    const voucher = await Voucher.findById(voucherId).populate('user', 'id username email');
+    const voucher = await Voucher.findById(voucherId).populate('userId', 'id username email');
 
     if (!voucher) {
       return res.status(404).json({
@@ -286,7 +286,7 @@ const createVoucher = async (req, res) => {
     }
 
     const voucher = await Voucher.create(voucherData);
-    await voucher.populate('user', 'id username email');
+    await voucher.populate('userId', 'id username email');
 
     res.status(201).json({
       success: true,
@@ -379,7 +379,7 @@ const updateVoucher = async (req, res) => {
       voucherId,
       updateData,
       { new: true }
-    ).populate('user', 'id username email');
+    ).populate('userId', 'id username email');
 
     res.json({
       success: true,

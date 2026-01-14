@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const API_URL = 'https://backend-node-5re9.onrender.com/api';
+const API_URL = 'http://localhost:5000/api';
 
 let token = '';
 let userId = '';
