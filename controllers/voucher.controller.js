@@ -182,6 +182,22 @@ const validateVoucher = async (req, res) => {
       });
     }
 
+    // Check if user has already used this voucher
+    const Order = require('../models/Order.model');
+    const usedOrder = await Order.findOne({
+      userId: userId,
+      voucherId: voucher._id,
+      orderStatus: { $ne: 'cancelled' }, // Ignore cancelled orders
+      paymentStatus: { $ne: 'failed' }   // Ignore failed payments
+    });
+
+    if (usedOrder) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn đã sử dụng voucher này rồi'
+      });
+    }
+
     // Check minimum order amount
     const amount = parseFloat(orderAmount) || 0;
     if (amount < parseFloat(voucher.minOrderAmount)) {
@@ -506,6 +522,148 @@ const getVoucherStats = async (req, res) => {
   }
 };
 
+// Collect voucher (user)
+const collectVoucher = async (req, res) => {
+  try {
+    const { voucherId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Only allow 'user' role to collect vouchers
+    if (userRole !== 'user') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ khách hàng mới có thể thu thập voucher'
+      });
+    }
+
+    // Check if voucher exists
+    const voucher = await Voucher.findById(voucherId);
+    if (!voucher) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy voucher'
+      });
+    }
+
+    // Check if voucher is active
+    if (!voucher.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voucher không còn hiệu lực'
+      });
+    }
+
+    // Check expiration date
+    const now = new Date();
+    if (now > voucher.endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voucher đã hết hạn sử dụng'
+      });
+    }
+
+    // Check usage limit
+    if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voucher đã hết lượt sử dụng'
+      });
+    }
+
+    // Check if user already collected this voucher
+    const user = await User.findById(userId);
+    if (user.savedVouchers.includes(voucherId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn đã lưu voucher này rồi'
+      });
+    }
+
+    // Check (Double-check) if user has already used this voucher in the past
+    // Prevent collecting if already used code directly
+    const Order = require('../models/Order.model');
+    const usedOrder = await Order.findOne({
+      userId: userId,
+      voucherId: voucher._id,
+      orderStatus: { $ne: 'cancelled' },
+      paymentStatus: { $ne: 'failed' }
+    });
+
+    if (usedOrder) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn đã sử dụng voucher này rồi, không thể lưu thêm'
+      });
+    }
+
+    // Add voucher to user's saved list
+    await User.findByIdAndUpdate(userId, {
+      $push: { savedVouchers: voucherId }
+    });
+
+    res.json({
+      success: true,
+      message: 'Đã lưu voucher vào ví'
+    });
+  } catch (error) {
+    console.error('Collect voucher error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi lưu voucher',
+      error: error.message
+    });
+  }
+};
+
+// Get my vouchers (user)
+const getMyVouchers = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const now = new Date();
+
+    const user = await User.findById(userId).populate({
+      path: 'savedVouchers',
+      match: {
+        isActive: true,
+        startDate: { $lte: now },
+        endDate: { $gte: now }
+      },
+      options: { sort: { createdAt: -1 } }
+    });
+
+    // Also get valid vouchers assigned directly to user via userId field in Voucher
+    const assignedVouchers = await Voucher.find({
+      userId: userId,
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now }
+    }).sort({ createdAt: -1 });
+    
+    const saved = user.savedVouchers || [];
+    const assigned = assignedVouchers || [];
+    
+    // Merge: Create a map by ID to deduplicate
+    const allVouchersMap = new Map();
+    saved.forEach(v => allVouchersMap.set(v.id, v));
+    assigned.forEach(v => allVouchersMap.set(v.id, v));
+
+    const allVouchers = Array.from(allVouchersMap.values());
+
+    res.json({
+      success: true,
+      data: allVouchers
+    });
+  } catch (error) {
+    console.error('Get my vouchers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi lấy danh sách voucher của bạn',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllVouchers,
   getPublicVouchers,
@@ -514,5 +672,7 @@ module.exports = {
   createVoucher,
   updateVoucher,
   deleteVoucher,
-  getVoucherStats
+  getVoucherStats,
+  collectVoucher,
+  getMyVouchers
 };

@@ -37,7 +37,11 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
-  }
+  },
+  savedVouchers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Voucher'
+  }]
 }, {
   timestamps: true,
   toJSON: { 

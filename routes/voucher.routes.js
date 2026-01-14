@@ -8,6 +8,10 @@ const { cacheMiddleware, invalidateCacheMiddleware } = require('../middleware/ca
 router.get('/public', optionalProtect, cacheMiddleware('vouchers-public', 300), voucherController.getPublicVouchers);
 router.post('/validate', protect, voucherController.validateVoucher);
 
+// User routes to manage their voucher wallet
+router.get('/my-vouchers', protect, voucherController.getMyVouchers);
+router.post('/collect/:voucherId', protect, voucherController.collectVoucher);
+
 // Admin routes
 router.get('/admin/all', protect, authorize('admin'), voucherController.getAllVouchers);
 router.get('/admin/stats', protect, authorize('admin'), cacheMiddleware('vouchers-stats', 60), voucherController.getVoucherStats);
