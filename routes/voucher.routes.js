@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const voucherController = require('../controllers/voucher.controller');
-const { protect, authorize } = require('../middleware/auth.middleware');
+const { protect, authorize, optionalProtect } = require('../middleware/auth.middleware');
 const { cacheMiddleware, invalidateCacheMiddleware } = require('../middleware/cache.middleware');
 
-// Public routes (with authentication)
-router.get('/public', protect, cacheMiddleware('vouchers-public', 300), voucherController.getPublicVouchers);
+// Public routes (with optional authentication)
+router.get('/public', optionalProtect, cacheMiddleware('vouchers-public', 300), voucherController.getPublicVouchers);
 router.post('/validate', protect, voucherController.validateVoucher);
 
 // Admin routes

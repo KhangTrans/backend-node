@@ -50,18 +50,27 @@ const getAllVouchers = async (req, res) => {
 // Get public vouchers (user can see)
 const getPublicVouchers = async (req, res) => {
   try {
+    const { type } = req.query;
     const userId = req.user?.id;
     const now = new Date();
 
-    const vouchers = await Voucher.find({
+    const orConditions = [{ userId: null }]; // Always include public vouchers
+    if (userId) {
+      orConditions.push({ userId: userId }); // user's private vouchers
+    }
+
+    const query = {
       isActive: true,
       startDate: { $lte: now },
       endDate: { $gte: now },
-      $or: [
-        { userId: null }, // Public vouchers
-        { userId: userId } // User's private vouchers
-      ]
-    }).sort({ createdAt: -1 });
+      $or: orConditions
+    };
+
+    if (type) {
+      query.type = type;
+    }
+
+    const vouchers = await Voucher.find(query).sort({ createdAt: -1 });
 
     // Filter out vouchers that reached usage limit
     const availableVouchers = vouchers.filter(voucher => {

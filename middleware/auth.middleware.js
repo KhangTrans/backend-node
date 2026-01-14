@@ -52,6 +52,32 @@ exports.protect = async (req, res, next) => {
   }
 };
 
+// Optional auth - verify token if present, but continue if not
+exports.optionalProtect = async (req, res, next) => {
+  let token;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (user && user.isActive) {
+      req.user = user;
+    }
+    next();
+  } catch (error) {
+    // Invalid token, just proceed as guest
+    next();
+  }
+};
+
 // Authorize roles
 exports.authorize = (...roles) => {
   return (req, res, next) => {
