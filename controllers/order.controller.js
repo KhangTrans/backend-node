@@ -84,6 +84,11 @@ const createOrder = async (req, res) => {
 
     // Initialize pricing
     let shippingFee = 30000; // Default shipping fee (30,000 VND)
+
+    // Free shipping for orders over 500,000 VND
+    if (subtotal > 500000) {
+      shippingFee = 0;
+    }
     let discount = 0;
     let voucherId = null;
 
@@ -612,7 +617,7 @@ const buyNow = async (req, res) => {
       shippingWard,
       shippingNote,
       paymentMethod = 'cod',
-      voucherCode
+      voucherIds
     } = req.body;
 
     // Validate required fields
@@ -663,68 +668,53 @@ const buyNow = async (req, res) => {
     const subtotal = parseFloat(product.price) * quantity;
 
     // Initialize pricing
+    // Initialize pricing
     let shippingFee = 30000; // Default shipping fee (30,000 VND)
+
+    // Free shipping for orders over 500,000 VND
+    if (subtotal > 500000) {
+      shippingFee = 0;
+    }
+
     let discount = 0;
-    let voucherId = null;
+    let discountVoucherId = null;
+    let shippingVoucherId = null;
 
-    // Apply voucher if provided
-    if (voucherCode) {
-      const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
+    // Apply voucher(s)
+    if (voucherIds && Array.isArray(voucherIds) && voucherIds.length > 0) {
+      for (const vId of voucherIds) {
+        try {
+          const voucher = await Voucher.findById(vId);
 
-      if (!voucher) {
-        return res.status(400).json({
-          success: false,
-          message: 'Mã voucher không tồn tại'
-        });
-      }
+          if (!voucher) continue;
 
-      // Validate voucher
-      if (!voucher.isActive) {
-        return res.status(400).json({
-          success: false,
-          message: 'Voucher không còn hiệu lực'
-        });
-      }
+          // Basic Validate logic
+          if (!voucher.isActive) continue;
+          
+          const now = new Date();
+          if (now < voucher.startDate || now > voucher.endDate) continue;
+          if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) continue;
+          if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) continue;
+          if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
 
-      const now = new Date();
-      if (now < voucher.startDate || now > voucher.endDate) {
-        return res.status(400).json({
-          success: false,
-          message: 'Voucher đã hết hạn hoặc chưa đến thời gian sử dụng'
-        });
-      }
-
-      if (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) {
-        return res.status(400).json({
-          success: false,
-          message: 'Voucher đã hết lượt sử dụng'
-        });
-      }
-
-      if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) {
-        return res.status(403).json({
-          success: false,
-          message: 'Voucher này không dành cho bạn'
-        });
-      }
-
-      if (subtotal < parseFloat(voucher.minOrderAmount)) {
-        return res.status(400).json({
-          success: false,
-          message: `Đơn hàng tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ để sử dụng voucher này`
-        });
-      }
-
-      // Apply voucher discount
-      voucherId = voucher._id;
-
-      if (voucher.type === 'DISCOUNT') {
-        discount = (subtotal * voucher.discountPercent) / 100;
-        if (voucher.maxDiscount) {
-          discount = Math.min(discount, parseFloat(voucher.maxDiscount));
+          // Apply
+          if (voucher.type === 'DISCOUNT' && !discountVoucherId) {
+            discountVoucherId = voucher._id;
+            let d = (subtotal * voucher.discountPercent) / 100;
+            if (voucher.maxDiscount) {
+              d = Math.min(d, parseFloat(voucher.maxDiscount));
+            }
+            discount += d;
+          } else if (voucher.type === 'FREE_SHIP' && !shippingVoucherId) {
+            // Only apply shipping voucher if shipping fee is not already 0
+            if (shippingFee > 0) {
+              shippingVoucherId = voucher._id;
+              shippingFee = 0;
+            }
+          }
+        } catch (err) {
+            console.log('Error applying voucher id:', vId, err.message);
         }
-      } else if (voucher.type === 'FREE_SHIP') {
-        shippingFee = 0;
       }
     }
 
@@ -756,7 +746,8 @@ const buyNow = async (req, res) => {
       shippingFee,
       discount,
       total,
-      voucherId,
+      discountVoucherId,
+      shippingVoucherId,
       items: [{
         productId: product._id,
         productName: product.name,
@@ -774,11 +765,11 @@ const buyNow = async (req, res) => {
     );
 
     // Update voucher usage count
-    if (voucherId) {
-      await Voucher.findByIdAndUpdate(
-        voucherId,
-        { $inc: { usedCount: 1 } }
-      );
+    if (discountVoucherId) {
+      await Voucher.findByIdAndUpdate(discountVoucherId, { $inc: { usedCount: 1 } });
+    }
+    if (shippingVoucherId) {
+      await Voucher.findByIdAndUpdate(shippingVoucherId, { $inc: { usedCount: 1 } });
     }
 
     // Populate order
