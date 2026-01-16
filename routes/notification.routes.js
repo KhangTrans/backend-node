@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth.middleware');
+const { protect, optionalProtect } = require('../middleware/auth.middleware');
 const {
   getNotifications,
   getUnreadCount,
@@ -10,14 +10,14 @@ const {
   clearReadNotifications
 } = require('../controllers/notification.controller');
 
-// All routes require authentication
+// Public route - Get unread count (returns 0 if not logged in)
+router.get('/unread-count', optionalProtect, getUnreadCount);
+
+// All routes below require authentication
 router.use(protect);
 
 // Get all notifications for current user
 router.get('/', getNotifications);
-
-// Get unread notification count
-router.get('/unread-count', getUnreadCount);
 
 // Mark notification as read
 router.put('/:id/read', markAsRead);

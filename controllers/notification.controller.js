@@ -48,9 +48,17 @@ exports.getNotifications = async (req, res) => {
 
 // @desc    Get unread notification count
 // @route   GET /api/notifications/unread-count
-// @access  Private
+// @access  Public (returns 0 if not logged in)
 exports.getUnreadCount = async (req, res) => {
   try {
+    // If user is not logged in, return 0
+    if (!req.user) {
+      return res.json({
+        success: true,
+        data: { count: 0 },
+      });
+    }
+
     const count = await Notification.countDocuments({
       userId: req.user.id,
       isRead: false,
