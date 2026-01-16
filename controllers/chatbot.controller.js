@@ -174,12 +174,23 @@ ${products.map((p, i) => `${i + 1}. ${p.name} - ${p.price} ${p.inStock ? '(Còn 
     }
     
     // Build conversation history for Gemini
-    const conversationHistory = history
+    let conversationHistory = history
       .reverse()
       .map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }));
+    
+    // Ensure history starts with 'user' role (Gemini requirement)
+    // Remove leading 'model' messages if any
+    while (conversationHistory.length > 0 && conversationHistory[0].role === 'model') {
+      conversationHistory.shift();
+    }
+    
+    // Exclude the current message (last one) from history
+    if (conversationHistory.length > 0) {
+      conversationHistory = conversationHistory.slice(0, -1);
+    }
     
     // Initialize Gemini model (without systemInstruction for gemini-pro compatibility)
     const model = genAI.getGenerativeModel({ 
@@ -190,9 +201,9 @@ ${products.map((p, i) => `${i + 1}. ${p.name} - ${p.price} ${p.inStock ? '(Còn 
     const systemPrompt = getSystemPrompt(storeInfo) + additionalContext;
     const fullMessage = `${systemPrompt}\n\nKhách hàng: ${message}`;
     
-    // Start chat with history
+    // Start chat with history (only if valid)
     const chat = model.startChat({
-      history: conversationHistory.slice(0, -1), // Exclude current message
+      history: conversationHistory,
       generationConfig: {
         maxOutputTokens: 500,
         temperature: 0.7,
