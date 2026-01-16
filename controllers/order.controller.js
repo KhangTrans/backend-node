@@ -112,6 +112,23 @@ const createOrder = async (req, res) => {
           if (voucher.userId !== null && voucher.userId.toString() !== userId.toString()) continue;
           if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
 
+          // Check if user has already used this voucher
+          const existingUsage = await Order.findOne({
+            userId,
+            orderStatus: { $ne: 'cancelled' },
+            $or: [
+              { discountVoucherId: voucher._id },
+              { shippingVoucherId: voucher._id }
+            ]
+          });
+
+          if (existingUsage) {
+            return res.status(400).json({
+              success: false,
+              message: `Bạn đã sử dụng voucher "${voucher.code}" rồi`
+            });
+          }
+
           // Apply
           if (voucher.type === 'DISCOUNT' && !discountVoucherId) {
             discountVoucherId = voucher._id;
