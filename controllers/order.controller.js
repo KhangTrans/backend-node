@@ -736,6 +736,74 @@ const buyNow = async (req, res) => {
   }
 };
 
+// @desc    Update order info (address, note, contact)
+// @route   PUT /api/orders/:orderId/info
+// @access  Private
+const updateOrderInfo = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const {
+      shippingAddress,
+      shippingCity,
+      shippingDistrict,
+      shippingWard,
+      shippingNote,
+      customerName,
+      customerPhone
+    } = req.body;
+
+    const order = await orderDao.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy đơn hàng'
+      });
+    }
+
+    // Check ownership
+    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền chỉnh sửa đơn hàng này'
+      });
+    }
+
+    // Check status
+    if (order.orderStatus !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ có thể chỉnh sửa đơn hàng khi đang chờ xử lý'
+      });
+    }
+
+    // Update fields if provided
+    const updateData = {};
+    if (shippingAddress) updateData.shippingAddress = shippingAddress;
+    if (shippingCity) updateData.shippingCity = shippingCity;
+    if (shippingDistrict) updateData.shippingDistrict = shippingDistrict;
+    if (shippingWard) updateData.shippingWard = shippingWard;
+    if (shippingNote !== undefined) updateData.shippingNote = shippingNote;
+    if (customerName) updateData.customerName = customerName;
+    if (customerPhone) updateData.customerPhone = customerPhone;
+
+    const updatedOrder = await orderDao.updateById(orderId, updateData);
+
+    res.json({
+      success: true,
+      message: 'Cập nhật thông tin đơn hàng thành công',
+      data: updatedOrder
+    });
+  } catch (error) {
+    console.error('Update order info error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi cập nhật thông tin đơn hàng',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   buyNow,
@@ -744,5 +812,6 @@ module.exports = {
   cancelOrder,
   getAllOrders,
   updateOrderStatus,
-  getOrderStatistics
+  getOrderStatistics,
+  updateOrderInfo
 };

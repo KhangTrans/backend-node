@@ -9,7 +9,8 @@ const {
   cancelOrder,
   getAllOrders,
   updateOrderStatus,
-  getOrderStatistics
+  getOrderStatistics,
+  updateOrderInfo
 } = require('../controllers/order.controller');
 
 // User routes (require authentication)
@@ -37,6 +38,11 @@ router.get('/:orderId', protect, getOrderById);
 // @desc    Cancel order
 // @access  Private
 router.put('/:orderId/cancel', protect, cancelOrder);
+
+// @route   PUT /api/orders/:orderId/info
+// @desc    Update order info (address, note, contact)
+// @access  Private
+router.put('/:orderId/info', protect, updateOrderInfo);
 
 // Admin routes
 // @route   GET /api/orders/admin/all
