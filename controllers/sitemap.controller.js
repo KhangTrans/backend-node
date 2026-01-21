@@ -53,7 +53,7 @@ exports.generateSitemap = async (req, res) => {
 // @access  Public
 exports.generateRobotsTxt = async (req, res) => {
   try {
-    const baseUrl = process.env.API_URL || 'https://backend-node-5re9.onrender.com';
+    const baseUrl = process.env.API_URL;
     
     let txt = 'User-agent: *\n';
     txt += 'Allow: /\n';

@@ -1,5 +1,6 @@
-const Voucher = require('../models/Voucher.model');
-const User = require('../models/User.model');
+const voucherDao = require('../dao/voucher.dao');
+const userDao = require('../dao/user.dao');
+const orderDao = require('../dao/order.dao');
 
 // Get all vouchers (admin)
 const getAllVouchers = async (req, res) => {
@@ -19,12 +20,11 @@ const getAllVouchers = async (req, res) => {
     }
 
     const [vouchers, total] = await Promise.all([
-      Voucher.find(where)
-        .populate('userId', 'id username email')
-        .sort({ createdAt: -1 })
-        .skip(parseInt(skip))
-        .limit(parseInt(limit)),
-      Voucher.countDocuments(where)
+      voucherDao.findAll(where, {
+        skip: parseInt(skip),
+        limit: parseInt(limit)
+      }),
+      voucherDao.count(where)
     ]);
 
     res.json({
@@ -52,25 +52,9 @@ const getPublicVouchers = async (req, res) => {
   try {
     const { type } = req.query;
     const userId = req.user?.id;
-    const now = new Date();
 
-    const orConditions = [{ userId: null }]; // Always include public vouchers
-    if (userId) {
-      orConditions.push({ userId: userId }); // user's private vouchers
-    }
-
-    const query = {
-      isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gte: now },
-      $or: orConditions
-    };
-
-    if (type) {
-      query.type = type;
-    }
-
-    const vouchers = await Voucher.find(query).sort({ createdAt: -1 });
+    const additionalFilter = type ? { type } : {};
+    const vouchers = await voucherDao.findForUser(userId, additionalFilter);
 
     // Filter out vouchers that reached usage limit
     const availableVouchers = vouchers.filter(voucher => {
@@ -97,7 +81,7 @@ const getVoucherById = async (req, res) => {
   try {
     const { voucherId } = req.params;
 
-    const voucher = await Voucher.findById(voucherId).populate('userId', 'id username email');
+    const voucher = await voucherDao.findById(voucherId);
 
     if (!voucher) {
       return res.status(404).json({
@@ -123,7 +107,7 @@ const getVoucherById = async (req, res) => {
 // Validate and check voucher(s)
 const validateVoucher = async (req, res) => {
   try {
-    const { code, codes, orderAmount } = req.body; // Support single 'code' or array 'codes'
+    const { code, codes, orderAmount } = req.body;
     const userId = req.user.id;
     const amount = parseFloat(orderAmount) || 0;
 
@@ -155,8 +139,7 @@ const validateVoucher = async (req, res) => {
     let isFreeShip = false;
 
     for (const voucherCode of voucherCodes) {
-      // Find voucher
-      const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
+      const voucher = await voucherDao.findByCode(voucherCode);
 
       if (!voucher) {
         return res.status(404).json({
@@ -180,16 +163,7 @@ const validateVoucher = async (req, res) => {
       if (amount < parseFloat(voucher.minOrderAmount)) throw new Error(`Voucher '${voucher.code}' yêu cầu đơn tối thiểu ${voucher.minOrderAmount.toLocaleString('vi-VN')}đ`);
 
       // Check usage history
-      const Order = require('../models/Order.model');
-      const usedOrder = await Order.findOne({
-        userId: userId,
-        $or: [
-            { discountVoucherId: voucher._id },
-            { shippingVoucherId: voucher._id }
-        ],
-        orderStatus: { $ne: 'cancelled' },
-        paymentStatus: { $ne: 'failed' }
-      });
+      const usedOrder = await orderDao.hasUserUsedVoucher(userId, voucher._id);
 
       if (usedOrder) throw new Error(`Bạn đã sử dụng voucher '${voucher.code}' rồi`);
 
@@ -235,7 +209,7 @@ const validateVoucher = async (req, res) => {
 
   } catch (error) {
     console.error('Validate voucher error:', error);
-    res.status(400).json({ // Changed to 400 for logic errors
+    res.status(400).json({
       success: false,
       message: error.message || 'Lỗi kiểm tra voucher',
     });
@@ -286,7 +260,7 @@ const createVoucher = async (req, res) => {
     }
 
     // Check if code already exists
-    const existingVoucher = await Voucher.findOne({ code: code.toUpperCase() });
+    const existingVoucher = await voucherDao.findByCode(code);
 
     if (existingVoucher) {
       return res.status(400).json({
@@ -315,7 +289,7 @@ const createVoucher = async (req, res) => {
       }
     }
 
-    const voucher = await Voucher.create(voucherData);
+    const voucher = await voucherDao.create(voucherData);
     await voucher.populate('userId', 'id username email');
 
     res.status(201).json({
@@ -352,7 +326,7 @@ const updateVoucher = async (req, res) => {
     } = req.body;
 
     // Find voucher
-    const existingVoucher = await Voucher.findById(voucherId);
+    const existingVoucher = await voucherDao.findById(voucherId, false);
 
     if (!existingVoucher) {
       return res.status(404).json({
@@ -363,7 +337,7 @@ const updateVoucher = async (req, res) => {
 
     // Check if new code conflicts with another voucher
     if (code && code.toUpperCase() !== existingVoucher.code) {
-      const codeExists = await Voucher.findOne({ code: code.toUpperCase() });
+      const codeExists = await voucherDao.findByCode(code);
       
       if (codeExists) {
         return res.status(400).json({
@@ -405,11 +379,7 @@ const updateVoucher = async (req, res) => {
       }
     }
 
-    const voucher = await Voucher.findByIdAndUpdate(
-      voucherId,
-      updateData,
-      { new: true }
-    ).populate('userId', 'id username email');
+    const voucher = await voucherDao.updateById(voucherId, updateData);
 
     res.json({
       success: true,
@@ -432,7 +402,7 @@ const deleteVoucher = async (req, res) => {
     const { voucherId } = req.params;
 
     // Check if voucher exists
-    const voucher = await Voucher.findById(voucherId);
+    const voucher = await voucherDao.findById(voucherId, false);
 
     if (!voucher) {
       return res.status(404).json({
@@ -441,14 +411,8 @@ const deleteVoucher = async (req, res) => {
       });
     }
 
-    // Check if voucher is used in orders - need to import Order model
-    const Order = require('../models/Order.model');
-    const orderCount = await Order.countDocuments({
-      $or: [
-        { discountVoucherId: voucherId },
-        { shippingVoucherId: voucherId }
-      ]
-    });
+    // Check if voucher is used in orders
+    const orderCount = await orderDao.countWithVoucher(voucherId);
 
     if (orderCount > 0) {
       return res.status(400).json({
@@ -457,7 +421,7 @@ const deleteVoucher = async (req, res) => {
       });
     }
 
-    await Voucher.findByIdAndDelete(voucherId);
+    await voucherDao.deleteById(voucherId);
 
     res.json({
       success: true,
@@ -476,44 +440,11 @@ const deleteVoucher = async (req, res) => {
 // Get voucher statistics (admin)
 const getVoucherStats = async (req, res) => {
   try {
-    const [total, active, expired, totalUsageResult, byType] = await Promise.all([
-      Voucher.countDocuments(),
-      Voucher.countDocuments({ isActive: true }),
-      Voucher.countDocuments({
-        endDate: { $lt: new Date() }
-      }),
-      Voucher.aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: '$usedCount' }
-          }
-        }
-      ]),
-      Voucher.aggregate([
-        {
-          $group: {
-            _id: '$type',
-            count: { $sum: 1 }
-          }
-        }
-      ])
-    ]);
-
-    const totalUsage = totalUsageResult.length > 0 ? totalUsageResult[0].total : 0;
+    const stats = await voucherDao.getStats();
 
     res.json({
       success: true,
-      data: {
-        total,
-        active,
-        expired,
-        totalUsage,
-        byType: byType.map(item => ({
-          type: item._id,
-          count: item.count
-        }))
-      }
+      data: stats
     });
   } catch (error) {
     console.error('Get voucher stats error:', error);
@@ -541,7 +472,7 @@ const collectVoucher = async (req, res) => {
     }
 
     // Check if voucher exists
-    const voucher = await Voucher.findById(voucherId);
+    const voucher = await voucherDao.findById(voucherId, false);
     if (!voucher) {
       return res.status(404).json({
         success: false,
@@ -575,26 +506,16 @@ const collectVoucher = async (req, res) => {
     }
 
     // Check if user already collected this voucher
-    const user = await User.findById(userId);
-    if (user.savedVouchers.includes(voucherId)) {
+    const hasSaved = await userDao.hasSavedVoucher(userId, voucherId);
+    if (hasSaved) {
       return res.status(400).json({
         success: false,
         message: 'Bạn đã lưu voucher này rồi'
       });
     }
 
-    // Check (Double-check) if user has already used this voucher in the past
-    // Prevent collecting if already used code directly
-    const Order = require('../models/Order.model');
-    const usedOrder = await Order.findOne({
-      userId: userId,
-      $or: [
-        { discountVoucherId: voucher._id },
-        { shippingVoucherId: voucher._id }
-      ],
-      orderStatus: { $ne: 'cancelled' },
-      paymentStatus: { $ne: 'failed' }
-    });
+    // Check if user has already used this voucher
+    const usedOrder = await orderDao.hasUserUsedVoucher(userId, voucher._id);
 
     if (usedOrder) {
       return res.status(400).json({
@@ -604,9 +525,7 @@ const collectVoucher = async (req, res) => {
     }
 
     // Add voucher to user's saved list
-    await User.findByIdAndUpdate(userId, {
-      $push: { savedVouchers: voucherId }
-    });
+    await userDao.addSavedVoucher(userId, voucherId);
 
     res.json({
       success: true,
@@ -628,28 +547,19 @@ const getMyVouchers = async (req, res) => {
     const userId = req.user.id;
     const now = new Date();
 
-    const user = await User.findById(userId).populate({
-      path: 'savedVouchers',
-      match: {
-        isActive: true,
-        startDate: { $lte: now },
-        endDate: { $gte: now }
-      },
-      options: { sort: { createdAt: -1 } }
-    });
-
-    // Also get valid vouchers assigned directly to user via userId field in Voucher
-    const assignedVouchers = await Voucher.find({
-      userId: userId,
+    const user = await userDao.findByIdWithVouchers(userId, {
       isActive: true,
       startDate: { $lte: now },
       endDate: { $gte: now }
-    }).sort({ createdAt: -1 });
+    });
+
+    // Also get valid vouchers assigned directly to user
+    const assignedVouchers = await voucherDao.findByUserId(userId);
     
-    const saved = user.savedVouchers || [];
+    const saved = user?.savedVouchers || [];
     const assigned = assignedVouchers || [];
     
-    // Merge: Create a map by ID to deduplicate
+    // Merge and deduplicate
     const allVouchersMap = new Map();
     saved.forEach(v => allVouchersMap.set(v.id, v));
     assigned.forEach(v => allVouchersMap.set(v.id, v));

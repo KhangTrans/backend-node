@@ -1,12 +1,11 @@
-const CustomerAddress = require('../models/CustomerAddress.model');
+const addressDao = require('../dao/address.dao');
 
 // Get all addresses of user
 const getAddresses = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const addresses = await CustomerAddress.find({ userId })
-      .sort({ isDefault: -1, createdAt: -1 });
+    const addresses = await addressDao.findByUserId(userId);
 
     res.json({
       success: true,
@@ -28,7 +27,7 @@ const getAddressById = async (req, res) => {
     const userId = req.user.id;
     const { addressId } = req.params;
 
-    const address = await CustomerAddress.findById(addressId);
+    const address = await addressDao.findById(addressId);
 
     if (!address) {
       return res.status(404).json({
@@ -84,21 +83,13 @@ const createAddress = async (req, res) => {
 
     // If setting as default, unset other default addresses
     if (isDefault) {
-      await CustomerAddress.updateMany(
-        {
-          userId,
-          isDefault: true
-        },
-        {
-          isDefault: false
-        }
-      );
+      await addressDao.unsetDefaultAddresses(userId);
     }
 
     // If this is first address, make it default
-    const addressCount = await CustomerAddress.countDocuments({ userId });
+    const addressCount = await addressDao.countByUserId(userId);
 
-    const newAddress = await CustomerAddress.create({
+    const newAddress = await addressDao.create({
       userId,
       fullName,
       phoneNumber,
@@ -142,7 +133,7 @@ const updateAddress = async (req, res) => {
     } = req.body;
 
     // Find address
-    const existingAddress = await CustomerAddress.findById(addressId);
+    const existingAddress = await addressDao.findById(addressId);
 
     if (!existingAddress) {
       return res.status(404).json({
@@ -161,16 +152,7 @@ const updateAddress = async (req, res) => {
 
     // If setting as default, unset other default addresses
     if (isDefault && !existingAddress.isDefault) {
-      await CustomerAddress.updateMany(
-        {
-          userId,
-          isDefault: true,
-          _id: { $ne: addressId }
-        },
-        {
-          isDefault: false
-        }
-      );
+      await addressDao.unsetDefaultAddresses(userId, addressId);
     }
 
     // Update address
@@ -184,11 +166,7 @@ const updateAddress = async (req, res) => {
     if (isDefault !== undefined) updateData.isDefault = isDefault;
     if (label !== undefined) updateData.label = label;
 
-    const updatedAddress = await CustomerAddress.findByIdAndUpdate(
-      addressId,
-      updateData,
-      { new: true }
-    );
+    const updatedAddress = await addressDao.updateById(addressId, updateData);
 
     res.json({
       success: true,
@@ -212,7 +190,7 @@ const setDefaultAddress = async (req, res) => {
     const { addressId } = req.params;
 
     // Find address
-    const address = await CustomerAddress.findById(addressId);
+    const address = await addressDao.findById(addressId);
 
     if (!address) {
       return res.status(404).json({
@@ -230,22 +208,10 @@ const setDefaultAddress = async (req, res) => {
     }
 
     // Unset all default addresses
-    await CustomerAddress.updateMany(
-      {
-        userId,
-        isDefault: true
-      },
-      {
-        isDefault: false
-      }
-    );
+    await addressDao.unsetDefaultAddresses(userId);
 
     // Set new default
-    const updatedAddress = await CustomerAddress.findByIdAndUpdate(
-      addressId,
-      { isDefault: true },
-      { new: true }
-    );
+    const updatedAddress = await addressDao.updateById(addressId, { isDefault: true });
 
     res.json({
       success: true,
@@ -269,7 +235,7 @@ const deleteAddress = async (req, res) => {
     const { addressId } = req.params;
 
     // Find address
-    const address = await CustomerAddress.findById(addressId);
+    const address = await addressDao.findById(addressId);
 
     if (!address) {
       return res.status(404).json({
@@ -287,18 +253,14 @@ const deleteAddress = async (req, res) => {
     }
 
     // Delete address
-    await CustomerAddress.findByIdAndDelete(addressId);
+    await addressDao.deleteById(addressId);
 
     // If deleted address was default, set another as default
     if (address.isDefault) {
-      const firstAddress = await CustomerAddress.findOne({ userId })
-        .sort({ createdAt: 1 });
+      const firstAddress = await addressDao.findFirstByUserId(userId);
 
       if (firstAddress) {
-        await CustomerAddress.findByIdAndUpdate(
-          firstAddress._id,
-          { isDefault: true }
-        );
+        await addressDao.updateById(firstAddress._id, { isDefault: true });
       }
     }
 
@@ -321,10 +283,7 @@ const getDefaultAddress = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const defaultAddress = await CustomerAddress.findOne({
-      userId,
-      isDefault: true
-    });
+    const defaultAddress = await addressDao.findDefaultByUserId(userId);
 
     if (!defaultAddress) {
       return res.status(404).json({

@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const passport = require('passport');
 require('dotenv').config();
 const { connectMongoDB } = require('./config/mongodb');
 const { connectRedis, disconnectRedis } = require('./config/redis');
@@ -30,6 +31,9 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Initialize Passport
+app.use(passport.initialize());
+
 // Routes
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/categories', require('./routes/category.routes'));
@@ -41,7 +45,6 @@ app.use('/api/addresses', require('./routes/address.routes'));
 app.use('/api/vouchers', require('./routes/voucher.routes'));
 app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/messages', require('./routes/chat.routes'));
-app.use('/api/chatbot', require('./routes/chatbot.routes'));
 
 // Payment routes - Load on all environments
 app.use('/api/payment', require('./routes/payment.routes'));

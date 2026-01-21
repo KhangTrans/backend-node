@@ -1,6 +1,7 @@
-const Category = require('../models/Category.model');
+const categoryDao = require('../dao/category.dao');
 const { validationResult } = require('express-validator');
 const { generateUniqueSlug } = require('../utils/slug');
+const Category = require('../models/Category.model');
 
 // @desc    Create new category
 // @route   POST /api/categories
@@ -22,7 +23,7 @@ exports.createCategory = async (req, res) => {
       ? await generateUniqueSlug(customSlug, null, Category)
       : await generateUniqueSlug(name, null, Category);
 
-    const category = await Category.create({
+    const category = await categoryDao.create({
       name,
       slug,
       description,
@@ -62,17 +63,11 @@ exports.getAllCategories = async (req, res) => {
       ];
     }
 
-    let query = Category.find(filter).sort({ name: 1 });
-
-    if (includeProducts === 'true') {
-      query = query.populate({
-        path: 'products',
-        match: { isActive: true },
-        select: '_id name slug price'
-      });
-    }
-
-    const categories = await query;
+    const categories = await categoryDao.findAll(
+      filter, 
+      { name: 1 }, 
+      includeProducts === 'true'
+    );
 
     res.status(200).json({
       success: true,
@@ -96,15 +91,7 @@ exports.getCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await Category.findById(id)
-      .populate({
-        path: 'products',
-        match: { isActive: true },
-        populate: {
-          path: 'images',
-          match: { isPrimary: true }
-        }
-      });
+    const category = await categoryDao.findById(id, true);
 
     if (!category) {
       return res.status(404).json({
@@ -134,15 +121,7 @@ exports.getCategoryBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const category = await Category.findOne({ slug })
-      .populate({
-        path: 'products',
-        match: { isActive: true },
-        populate: {
-          path: 'images',
-          match: { isPrimary: true }
-        }
-      });
+    const category = await categoryDao.findBySlug(slug, true);
 
     if (!category) {
       return res.status(404).json({
@@ -173,7 +152,7 @@ exports.updateCategory = async (req, res) => {
     const { id } = req.params;
     const { name, slug: customSlug, description, imageUrl, isActive } = req.body;
 
-    const existingCategory = await Category.findById(id);
+    const existingCategory = await categoryDao.findById(id, false);
 
     if (!existingCategory) {
       return res.status(404).json({
@@ -199,11 +178,7 @@ exports.updateCategory = async (req, res) => {
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    const category = await Category.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true }
-    );
+    const category = await categoryDao.updateById(id, updateData);
 
     res.status(200).json({
       success: true,
@@ -227,7 +202,7 @@ exports.deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await Category.findById(id).populate('products');
+    const category = await categoryDao.findByIdWithProducts(id);
 
     if (!category) {
       return res.status(404).json({
@@ -243,7 +218,7 @@ exports.deleteCategory = async (req, res) => {
       });
     }
 
-    await Category.findByIdAndDelete(id);
+    await categoryDao.deleteById(id);
 
     res.status(200).json({
       success: true,

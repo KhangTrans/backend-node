@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
+const passport = require('passport');
 const authController = require('../controllers/auth.controller');
 const { protect } = require('../middleware/auth.middleware');
+
+// Initialize Passport config
+require('../config/passport');
 
 // Validation rules
 const registerValidation = [
@@ -36,10 +40,54 @@ const loginValidation = [
     .withMessage('Password is required')
 ];
 
-// Routes
+// ==================== Local Auth Routes ====================
+
+// @route   POST /api/auth/register
+// @desc    Register new user
+// @access  Public
 router.post('/register', registerValidation, authController.register);
+
+// @route   POST /api/auth/login
+// @desc    Login user
+// @access  Public
 router.post('/login', loginValidation, authController.login);
+
+// @route   GET /api/auth/me
+// @desc    Get current logged in user
+// @access  Private
 router.get('/me', protect, authController.getMe);
-router.get('/users', authController.getAllUsers); // Get all users (for testing)
+
+// @route   GET /api/auth/users
+// @desc    Get all users (for testing)
+// @access  Public
+router.get('/users', authController.getAllUsers);
+
+// ==================== Google OAuth Routes ====================
+
+// @route   GET /api/auth/google
+// @desc    Initiate Google OAuth login
+// @access  Public
+router.get('/google',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false 
+  })
+);
+
+// @route   GET /api/auth/google/callback
+// @desc    Google OAuth callback URL
+// @access  Public
+router.get('/google/callback',
+  passport.authenticate('google', { 
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`,
+    session: false 
+  }),
+  authController.googleCallback
+);
+
+// @route   POST /api/auth/google/token
+// @desc    Login with Google token (for mobile apps / SPA)
+// @access  Public
+router.post('/google/token', authController.googleTokenLogin);
 
 module.exports = router;

@@ -1,17 +1,16 @@
-const Cart = require('../models/Cart.model');
-const Product = require('../models/Product.model');
+const cartDao = require('../dao/cart.dao');
+const productDao = require('../dao/product.dao');
 
 // Get user's cart
 const getCart = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    let cart = await Cart.findOne({ userId })
-      .populate('items.productId');
+    let cart = await cartDao.findByUserIdWithProducts(userId);
 
     // Create cart if it doesn't exist
     if (!cart) {
-      cart = await Cart.create({
+      cart = await cartDao.create({
         userId,
         items: []
       });
@@ -65,7 +64,7 @@ const addToCart = async (req, res) => {
     }
 
     // Check if product exists and is active
-    const product = await Product.findById(productId);
+    const product = await productDao.findById(productId, false);
 
     if (!product) {
       return res.status(404).json({
@@ -90,16 +89,10 @@ const addToCart = async (req, res) => {
     }
 
     // Get or create cart
-    let cart = await Cart.findOne({ userId });
-
-    if (!cart) {
-      cart = await Cart.create({ userId, items: [] });
-    }
+    let cart = await cartDao.getOrCreate(userId);
 
     // Check if item already exists in cart
-    const existingItemIndex = cart.items.findIndex(
-      item => item.productId.toString() === productId
-    );
+    const existingItemIndex = cartDao.findCartItemByProductId(cart, productId);
 
     let updatedCart;
     if (existingItemIndex > -1) {
@@ -115,10 +108,9 @@ const addToCart = async (req, res) => {
 
       cart.items[existingItemIndex].quantity = newQuantity;
       cart.items[existingItemIndex].price = product.price;
-      await cart.save();
+      await cartDao.save(cart);
 
-      updatedCart = await Cart.findOne({ userId })
-        .populate('items.productId');
+      updatedCart = await cartDao.findByUserIdWithProducts(userId);
     } else {
       // Create new cart item
       cart.items.push({
@@ -126,10 +118,9 @@ const addToCart = async (req, res) => {
         quantity: quantity,
         price: product.price
       });
-      await cart.save();
+      await cartDao.save(cart);
 
-      updatedCart = await Cart.findOne({ userId })
-        .populate('items.productId');
+      updatedCart = await cartDao.findByUserIdWithProducts(userId);
     }
 
     // Get the added item
@@ -167,7 +158,7 @@ const updateCartItem = async (req, res) => {
     }
 
     // Find cart
-    const cart = await Cart.findOne({ userId });
+    const cart = await cartDao.findByUserId(userId);
 
     if (!cart) {
       return res.status(404).json({
@@ -177,7 +168,7 @@ const updateCartItem = async (req, res) => {
     }
 
     // Find cart item
-    const cartItem = cart.items.id(itemId);
+    const cartItem = cartDao.getCartItemById(cart, itemId);
 
     if (!cartItem) {
       return res.status(404).json({
@@ -187,7 +178,7 @@ const updateCartItem = async (req, res) => {
     }
 
     // Get product to check stock
-    const product = await Product.findById(cartItem.productId);
+    const product = await productDao.findById(cartItem.productId, false);
 
     if (!product) {
       return res.status(404).json({
@@ -207,12 +198,10 @@ const updateCartItem = async (req, res) => {
     // Update quantity
     cartItem.quantity = quantity;
     cartItem.price = product.price;
-    await cart.save();
+    await cartDao.save(cart);
 
     // Populate and return
-    const updatedCart = await Cart.findOne({ userId })
-      .populate('items.productId');
-
+    const updatedCart = await cartDao.findByUserIdWithProducts(userId);
     const updatedItem = updatedCart.items.id(itemId);
 
     res.json({
@@ -237,7 +226,7 @@ const removeFromCart = async (req, res) => {
     const { itemId } = req.params;
 
     // Find cart
-    const cart = await Cart.findOne({ userId });
+    const cart = await cartDao.findByUserId(userId);
 
     if (!cart) {
       return res.status(404).json({
@@ -247,8 +236,7 @@ const removeFromCart = async (req, res) => {
     }
 
     // Remove cart item
-    cart.items.pull(itemId);
-    await cart.save();
+    await cartDao.removeItem(cart, itemId);
 
     res.json({
       success: true,
@@ -269,7 +257,7 @@ const clearCart = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const cart = await Cart.findOne({ userId });
+    const cart = await cartDao.findByUserId(userId);
 
     if (!cart) {
       return res.status(404).json({
@@ -279,8 +267,7 @@ const clearCart = async (req, res) => {
     }
 
     // Delete all cart items
-    cart.items = [];
-    await cart.save();
+    await cartDao.clearItems(userId);
 
     res.json({
       success: true,

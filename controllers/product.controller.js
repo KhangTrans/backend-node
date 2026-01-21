@@ -1,6 +1,7 @@
-const Product = require('../models/Product.model');
+const productDao = require('../dao/product.dao');
 const { validationResult } = require('express-validator');
 const { generateUniqueSlug } = require('../utils/slug');
+const Product = require('../models/Product.model');
 
 // @desc    Create new product
 // @route   POST /api/products
@@ -66,7 +67,7 @@ exports.createProduct = async (req, res) => {
     };
 
     // Create product
-    const product = await Product.create(productData);
+    const product = await productDao.create(productData);
 
     // Populate relations
     await product.populate([
@@ -119,16 +120,12 @@ exports.getAllProducts = async (req, res) => {
 
     // Get products with pagination
     const [products, total] = await Promise.all([
-      Product.find(filter)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .sort({ createdAt: -1 })
-        .populate({
-          path: 'createdBy',
-          select: '_id username fullName'
-        })
-        .populate('categoryId'),
-      Product.countDocuments(filter)
+      productDao.findAll(filter, {
+        skip,
+        limit: parseInt(limit),
+        sort: { createdAt: -1 }
+      }),
+      productDao.count(filter)
     ]);
 
     res.status(200).json({
@@ -156,12 +153,7 @@ exports.getProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const product = await Product.findById(id)
-      .populate({
-        path: 'createdBy',
-        select: '_id username fullName email'
-      })
-      .populate('categoryId');
+    const product = await productDao.findById(id);
 
     if (!product) {
       return res.status(404).json({
@@ -191,12 +183,7 @@ exports.getProductBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const product = await Product.findOne({ slug })
-      .populate({
-        path: 'createdBy',
-        select: '_id username fullName email'
-      })
-      .populate('categoryId');
+    const product = await productDao.findBySlug(slug);
 
     if (!product) {
       return res.status(404).json({
@@ -242,7 +229,7 @@ exports.updateProduct = async (req, res) => {
     } = req.body;
 
     // Check if product exists
-    const existingProduct = await Product.findById(id);
+    const existingProduct = await productDao.findById(id, false);
 
     if (!existingProduct) {
       return res.status(404).json({
@@ -314,16 +301,7 @@ exports.updateProduct = async (req, res) => {
     }
 
     // Update product
-    const product = await Product.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true }
-    )
-      .populate({
-        path: 'createdBy',
-        select: '_id username fullName'
-      })
-      .populate('categoryId');
+    const product = await productDao.updateById(id, updateData);
 
     res.status(200).json({
       success: true,
@@ -348,7 +326,7 @@ exports.deleteProduct = async (req, res) => {
     const { id } = req.params;
 
     // Check if product exists
-    const product = await Product.findById(id);
+    const product = await productDao.findById(id, false);
 
     if (!product) {
       return res.status(404).json({
@@ -366,7 +344,7 @@ exports.deleteProduct = async (req, res) => {
     }
 
     // Delete product
-    await Product.findByIdAndDelete(id);
+    await productDao.deleteById(id);
 
     res.status(200).json({
       success: true,

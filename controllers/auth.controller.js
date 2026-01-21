@@ -1,4 +1,4 @@
-const User = require('../models/User.model');
+const userDao = require('../dao/user.dao');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 
@@ -26,9 +26,7 @@ exports.register = async (req, res) => {
     const { username, email, password, fullName } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
-    });
+    const existingUser = await userDao.findByEmailOrUsername(email, username);
 
     if (existingUser) {
       return res.status(400).json({ 
@@ -38,7 +36,7 @@ exports.register = async (req, res) => {
     }
 
     // Create new user (password will be hashed by model pre-save hook)
-    const user = await User.create({
+    const user = await userDao.create({
       username,
       email,
       password,
@@ -89,7 +87,7 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // Check if user exists
-    const user = await User.findOne({ email });
+    const user = await userDao.findByEmail(email);
 
     if (!user) {
       return res.status(401).json({ 
@@ -148,7 +146,7 @@ exports.login = async (req, res) => {
 // @access  Private
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await userDao.findById(req.user.id, '-password');
 
     res.status(200).json({
       success: true,
@@ -169,9 +167,7 @@ exports.getMe = async (req, res) => {
 // @access  Public (for testing - should be protected in production)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find()
-      .select('-password')
-      .sort({ createdAt: -1 });
+    const users = await userDao.findAll('-password', { createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -187,3 +183,124 @@ exports.getAllUsers = async (req, res) => {
     });
   }
 };
+
+// @desc    Google OAuth callback handler
+// @route   GET /api/auth/google/callback
+// @access  Public
+exports.googleCallback = async (req, res) => {
+  try {
+    // User is already authenticated by Passport
+    const user = req.user;
+
+    if (!user) {
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=account_deactivated`);
+    }
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    // Redirect to frontend with token
+    res.redirect(`${process.env.FRONTEND_URL}/auth/google/success?token=${token}`);
+  } catch (error) {
+    console.error('Google callback error:', error);
+    res.redirect(`${process.env.FRONTEND_URL}/login?error=server_error`);
+  }
+};
+
+// @desc    Google OAuth login (API response for mobile/SPA)
+// @route   POST /api/auth/google/token
+// @access  Public
+exports.googleTokenLogin = async (req, res) => {
+  try {
+    const { googleId, email, fullName, avatar } = req.body;
+
+    if (!googleId || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google ID and email are required'
+      });
+    }
+
+    // Check if user exists with Google ID
+    let user = await userDao.findByGoogleId(googleId);
+
+    if (!user) {
+      // Check if user exists with same email
+      user = await userDao.findByEmail(email);
+
+      if (user) {
+        // Link Google account to existing user
+        await userDao.updateById(user._id, {
+          googleId,
+          authProvider: 'google',
+          avatar: user.avatar || avatar
+        });
+        user = await userDao.findById(user._id);
+      } else {
+        // Create new user
+        const username = generateUniqueUsername(fullName || email.split('@')[0]);
+        
+        user = await userDao.create({
+          googleId,
+          email,
+          username,
+          fullName: fullName || email.split('@')[0],
+          avatar,
+          authProvider: 'google',
+          isActive: true
+        });
+      }
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'Account has been deactivated'
+      });
+    }
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Google login successful',
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          fullName: user.fullName,
+          avatar: user.avatar,
+          role: user.role,
+          authProvider: user.authProvider
+        },
+        token
+      }
+    });
+  } catch (error) {
+    console.error('Google token login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error logging in with Google',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to generate unique username
+function generateUniqueUsername(displayName) {
+  const baseUsername = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .substring(0, 20);
+  
+  const randomSuffix = Math.floor(Math.random() * 10000);
+  return `${baseUsername}${randomSuffix}`;
+}

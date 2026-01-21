@@ -1,5 +1,4 @@
-const Notification = require('../models/Notification.model');
-const User = require('../models/User.model');
+const notificationDao = require('../dao/notification.dao');
 
 // @desc    Get all notifications for current user
 // @route   GET /api/notifications
@@ -9,21 +8,19 @@ exports.getNotifications = async (req, res) => {
     const { page = 1, limit = 20, isRead } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {
-      userId: req.user.id,
-    };
+    const filter = {};
 
     // Filter by read status if provided
     if (isRead !== undefined) {
-      where.isRead = isRead === 'true';
+      filter.isRead = isRead === 'true';
     }
 
     const [notifications, total] = await Promise.all([
-      Notification.find(where)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Notification.countDocuments(where),
+      notificationDao.findByUserId(req.user.id, filter, {
+        skip,
+        limit: parseInt(limit)
+      }),
+      notificationDao.countByUserId(req.user.id, filter)
     ]);
 
     res.json({
@@ -59,10 +56,7 @@ exports.getUnreadCount = async (req, res) => {
       });
     }
 
-    const count = await Notification.countDocuments({
-      userId: req.user.id,
-      isRead: false,
-    });
+    const count = await notificationDao.countUnread(req.user.id);
 
     res.json({
       success: true,
@@ -85,7 +79,7 @@ exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const notification = await Notification.findById(id);
+    const notification = await notificationDao.findById(id);
 
     if (!notification) {
       return res.status(404).json({
@@ -102,11 +96,7 @@ exports.markAsRead = async (req, res) => {
       });
     }
 
-    const updatedNotification = await Notification.findByIdAndUpdate(
-      id,
-      { isRead: true },
-      { new: true }
-    );
+    const updatedNotification = await notificationDao.markAsRead(id);
 
     res.json({
       success: true,
@@ -128,15 +118,7 @@ exports.markAsRead = async (req, res) => {
 // @access  Private
 exports.markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany(
-      {
-        userId: req.user.id,
-        isRead: false,
-      },
-      {
-        isRead: true,
-      }
-    );
+    await notificationDao.markAllAsRead(req.user.id);
 
     res.json({
       success: true,
@@ -159,7 +141,7 @@ exports.deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const notification = await Notification.findById(id);
+    const notification = await notificationDao.findById(id);
 
     if (!notification) {
       return res.status(404).json({
@@ -176,7 +158,7 @@ exports.deleteNotification = async (req, res) => {
       });
     }
 
-    await Notification.findByIdAndDelete(id);
+    await notificationDao.deleteById(id);
 
     res.json({
       success: true,
@@ -197,10 +179,7 @@ exports.deleteNotification = async (req, res) => {
 // @access  Private
 exports.clearReadNotifications = async (req, res) => {
   try {
-    await Notification.deleteMany({
-      userId: req.user.id,
-      isRead: true,
-    });
+    await notificationDao.deleteReadByUserId(req.user.id);
 
     res.json({
       success: true,

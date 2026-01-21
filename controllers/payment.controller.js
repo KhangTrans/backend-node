@@ -1,9 +1,8 @@
-const Order = require('../models/Order.model');
-const Voucher = require('../models/Voucher.model');
+const orderDao = require('../dao/order.dao');
+const cartDao = require('../dao/cart.dao');
+const productDao = require('../dao/product.dao');
 const vnpay = require('../config/vnpay');
 const zalopay = require('../config/zalopay');
-const Cart = require('../models/Cart.model');
-const Product = require('../models/Product.model');
 
 // @desc    Create VNPay payment URL
 // @route   POST /api/payment/vnpay/create
@@ -20,7 +19,7 @@ exports.createVNPayPayment = async (req, res) => {
     }
 
     // Verify order exists and belongs to user
-    const order = await Order.findById(orderId);
+    const order = await orderDao.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -44,7 +43,6 @@ exports.createVNPayPayment = async (req, res) => {
     }
 
     // Get client IP
-    // Get client IP
     const forwardedIps = req.headers['x-forwarded-for']?.split(',').map(ip => ip.trim());
     const ipAddr = forwardedIps?.[0] || 
                    req.connection.remoteAddress || 
@@ -61,7 +59,7 @@ exports.createVNPayPayment = async (req, res) => {
     );
 
     // Save payment info
-    await Order.findByIdAndUpdate(orderId, {
+    await orderDao.updateById(orderId, {
       paymentMethod: 'vnpay',
       paymentStatus: 'pending'
     });
@@ -103,7 +101,7 @@ exports.vnpayReturn = async (req, res) => {
     const transactionNo = vnp_Params['vnp_TransactionNo'];
 
     // Find order by orderNumber
-    const order = await Order.findOne({ orderNumber: orderId });
+    const order = await orderDao.findByOrderNumber(orderId);
 
     if (!order) {
       return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=Order not found`);
@@ -113,35 +111,30 @@ exports.vnpayReturn = async (req, res) => {
       console.log(`[VNPay Return] Payment successful for order ${orderId}. Updating status...`);
       
       // Update Order Status
-      const updateResult = await Order.findByIdAndUpdate(order._id, {
+      const updateResult = await orderDao.updateById(order._id, {
         paymentStatus: 'paid',
         orderStatus: 'pending',
         paidAt: new Date(),
         transactionId: transactionNo
-      }, { new: true });
+      });
       
       console.log(`[VNPay Return] Update result: ${updateResult.paymentStatus}`);
 
       // Clear cart on success
-      await Cart.findOneAndUpdate(
-        { userId: order.userId },
-        { items: [] }
-      );
+      await cartDao.clearItems(order.userId);
 
       return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}&orderNumber=${orderId}`);
     } else {
       // Payment failed
       if (order.paymentStatus !== 'failed') {
-        await Order.findByIdAndUpdate(order._id, {
+        await orderDao.updateById(order._id, {
           paymentStatus: 'failed',
-          status: 'cancelled' // Cancel order
+          orderStatus: 'cancelled'
         });
 
         // Restore stock
         for (const item of order.items) {
-          await Product.findByIdAndUpdate(item.productId, {
-            $inc: { stock: item.quantity }
-          });
+          await productDao.updateStock(item.productId, item.quantity);
         }
       }
 
@@ -176,7 +169,7 @@ exports.vnpayIPN = async (req, res) => {
     const responseCode = vnp_Params['vnp_ResponseCode'];
     const amount = vnp_Params['vnp_Amount'] / 100;
 
-    const order = await Order.findOne({ orderNumber: orderId });
+    const order = await orderDao.findByOrderNumber(orderId);
 
     if (!order) {
       return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
@@ -188,32 +181,27 @@ exports.vnpayIPN = async (req, res) => {
 
     if (responseCode === '00') {
       // Update order
-      await Order.findByIdAndUpdate(order._id, {
+      await orderDao.updateById(order._id, {
         paymentStatus: 'paid',
-        status: 'processing',
+        orderStatus: 'processing',
         paidAt: new Date()
       });
 
       // Clear cart on success (IPN backup)
-      await Cart.findOneAndUpdate(
-        { userId: order.userId },
-        { items: [] }
-      );
+      await cartDao.clearItems(order.userId);
 
       return res.status(200).json({ RspCode: '00', Message: 'Success' });
     } else {
       // Payment failed / Cancelled
       if (order.paymentStatus !== 'failed') {
-        await Order.findByIdAndUpdate(order._id, {
+        await orderDao.updateById(order._id, {
           paymentStatus: 'failed',
-          status: 'cancelled'
+          orderStatus: 'cancelled'
         });
 
         // Restore stock
         for (const item of order.items) {
-          await Product.findByIdAndUpdate(item.productId, {
-            $inc: { stock: item.quantity }
-          });
+          await productDao.updateStock(item.productId, item.quantity);
         }
       }
 
@@ -240,7 +228,7 @@ exports.createZaloPayPayment = async (req, res) => {
     }
 
     // Verify order
-    const order = await Order.findById(orderId).populate('items.productId');
+    const order = await orderDao.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -288,7 +276,7 @@ exports.createZaloPayPayment = async (req, res) => {
     }
 
     // Save payment info
-    await Order.findByIdAndUpdate(orderId, {
+    await orderDao.updateById(orderId, {
       paymentMethod: 'zalopay',
       paymentStatus: 'pending',
       transactionId: result.app_trans_id
@@ -340,7 +328,7 @@ exports.zaloPayCallback = async (req, res) => {
         console.log('ZaloPay callback - Data:', dataJson);
 
         // Update order
-        const order = await Order.findById(orderId);
+        const order = await orderDao.findById(orderId);
 
         if (!order) {
           result.return_code = -1;
@@ -349,9 +337,9 @@ exports.zaloPayCallback = async (req, res) => {
           result.return_code = 1;
           result.return_message = 'Order already confirmed';
         } else {
-          await Order.findByIdAndUpdate(orderId, {
+          await orderDao.updateById(orderId, {
             paymentStatus: 'paid',
-            status: 'processing',
+            orderStatus: 'processing',
             paidAt: new Date(),
             transactionId: dataJson.app_trans_id
           });
@@ -380,7 +368,7 @@ exports.getPaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order = await Order.findById(orderId);
+    const order = await orderDao.findById(orderId);
 
     if (!order) {
       return res.status(404).json({

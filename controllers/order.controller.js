@@ -1,7 +1,7 @@
-const Order = require('../models/Order.model');
-const Cart = require('../models/Cart.model');
-const Product = require('../models/Product.model');
-const Voucher = require('../models/Voucher.model');
+const orderDao = require('../dao/order.dao');
+const cartDao = require('../dao/cart.dao');
+const productDao = require('../dao/product.dao');
+const voucherDao = require('../dao/voucher.dao');
 const { notifyAdmin, notifyUser } = require('../config/socket');
 
 // Helper function to format price
@@ -33,7 +33,7 @@ const createOrder = async (req, res) => {
       shippingWard,
       shippingNote,
       paymentMethod = 'cod',
-      voucherIds // Changed from voucherCode to voucherIds
+      voucherIds
     } = req.body;
 
     // Validate required fields
@@ -45,14 +45,7 @@ const createOrder = async (req, res) => {
     }
 
     // Get user's cart
-    const cart = await Cart.findOne({ userId })
-      .populate({
-        path: 'items.productId',
-        populate: {
-          path: 'images',
-          match: { isPrimary: true }
-        }
-      });
+    const cart = await cartDao.findByUserIdWithProducts(userId);
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
@@ -83,14 +76,11 @@ const createOrder = async (req, res) => {
     }, 0);
 
     // Initialize pricing
-    let shippingFee = 30000; // Default shipping fee (30,000 VND)
-
-    // Free shipping for orders over 500,000 VND
+    let shippingFee = 30000;
     if (subtotal > 500000) {
       shippingFee = 0;
     }
     let discount = 0;
-    let voucherId = null;
 
     // Apply voucher(s)
     let discountVoucherId = null;
@@ -99,11 +89,9 @@ const createOrder = async (req, res) => {
     if (voucherIds && Array.isArray(voucherIds) && voucherIds.length > 0) {
       for (const vId of voucherIds) {
         try {
-          const voucher = await Voucher.findById(vId);
+          const voucher = await voucherDao.findById(vId, false);
 
           if (!voucher) continue;
-
-          // Basic Validate logic
           if (!voucher.isActive) continue;
           
           const now = new Date();
@@ -113,14 +101,7 @@ const createOrder = async (req, res) => {
           if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
 
           // Check if user has already used this voucher
-          const existingUsage = await Order.findOne({
-            userId,
-            orderStatus: { $ne: 'cancelled' },
-            $or: [
-              { discountVoucherId: voucher._id },
-              { shippingVoucherId: voucher._id }
-            ]
-          });
+          const existingUsage = await orderDao.hasUserUsedVoucher(userId, voucher._id);
 
           if (existingUsage) {
             return res.status(400).json({
@@ -142,8 +123,7 @@ const createOrder = async (req, res) => {
             shippingFee = 0;
           }
         } catch (err) {
-            // Ignore invalid IDs silently or log them
-            console.log('Error applying voucher id:', vId, err.message);
+          console.log('Error applying voucher id:', vId, err.message);
         }
       }
     }
@@ -155,12 +135,12 @@ const createOrder = async (req, res) => {
     let isUnique = false;
     while (!isUnique) {
       orderNumber = generateOrderNumber();
-      const existing = await Order.findOne({ orderNumber });
+      const existing = await orderDao.findByOrderNumber(orderNumber);
       if (!existing) isUnique = true;
     }
 
     // Create order
-    const order = await Order.create({
+    const order = await orderDao.create({
       orderNumber,
       userId,
       customerName,
@@ -176,9 +156,7 @@ const createOrder = async (req, res) => {
       shippingFee,
       discount,
       total,
-      total,
-      discountVoucherId,
-      shippingVoucherId,
+      voucherId: discountVoucherId || shippingVoucherId,
       items: cart.items.map(item => ({
         productId: item.productId._id,
         productName: item.productId.name,
@@ -191,34 +169,29 @@ const createOrder = async (req, res) => {
 
     // Update product stock
     for (const item of cart.items) {
-      await Product.findByIdAndUpdate(
-        item.productId._id,
-        { $inc: { stock: -item.quantity } }
-      );
+      await productDao.updateStock(item.productId._id, -item.quantity);
     }
 
     // Update voucher usage count
     if (discountVoucherId) {
-      await Voucher.findByIdAndUpdate(discountVoucherId, { $inc: { usedCount: 1 } });
+      await voucherDao.incrementUsageCount(discountVoucherId);
     }
     if (shippingVoucherId) {
-      await Voucher.findByIdAndUpdate(shippingVoucherId, { $inc: { usedCount: 1 } });
+      await voucherDao.incrementUsageCount(shippingVoucherId);
     }
 
-    // Clear cart ONLY if COD (For Online Payment, clear after success in payment.controller)
+    // Clear cart ONLY if COD
     if (paymentMethod === 'cod') {
-      cart.items = [];
-      await cart.save();
+      await cartDao.clearItems(userId);
     }
 
     // Populate order
     await order.populate([
       { path: 'items.productId' },
-      { path: 'discountVoucherId' },
-      { path: 'shippingVoucherId' }
+      { path: 'voucherId' }
     ]);
 
-    // Notify admin about new order (real-time)
+    // Notify admin
     try {
       await notifyAdmin(
         'ORDER_CREATED',
@@ -228,7 +201,6 @@ const createOrder = async (req, res) => {
       );
     } catch (notifyError) {
       console.error('Error notifying admin:', notifyError);
-      // Don't fail the order creation if notification fails
     }
 
     res.status(201).json({
@@ -254,20 +226,17 @@ const getMyOrders = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const filter = { userId };
+    const filter = {};
     if (status) {
       filter.orderStatus = status;
     }
 
     const [orders, total] = await Promise.all([
-      Order.find(filter)
-        .populate('items.productId')
-        .populate('discountVoucherId')
-        .populate('shippingVoucherId')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Order.countDocuments(filter)
+      orderDao.findByUserId(userId, filter, {
+        skip,
+        limit: parseInt(limit)
+      }),
+      orderDao.countByUserId(userId, filter)
     ]);
 
     res.json({
@@ -296,10 +265,7 @@ const getOrderById = async (req, res) => {
     const userId = req.user.id;
     const { orderId } = req.params;
 
-    const order = await Order.findById(orderId)
-      .populate('items.productId')
-      .populate('discountVoucherId')
-      .populate('shippingVoucherId');
+    const order = await orderDao.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -308,7 +274,7 @@ const getOrderById = async (req, res) => {
       });
     }
 
-    // Check permission (user can only view their own orders, admin can view all)
+    // Check permission
     if (order.userId.toString() !== userId.toString() && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -337,7 +303,7 @@ const cancelOrder = async (req, res) => {
     const { orderId } = req.params;
     const { reason } = req.body;
 
-    const order = await Order.findById(orderId).populate('items.productId');
+    const order = await orderDao.findByIdWithProducts(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -366,14 +332,11 @@ const cancelOrder = async (req, res) => {
     order.orderStatus = 'cancelled';
     order.cancelledAt = new Date();
     order.cancellationReason = reason || 'Khách hàng hủy đơn';
-    await order.save();
+    await orderDao.save(order);
 
     // Restore product stock
     for (const item of order.items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stock: item.quantity } }
-      );
+      await productDao.updateStock(item.productId, item.quantity);
     }
 
     res.json({
@@ -404,17 +367,14 @@ const getAllOrders = async (req, res) => {
     }
     if (paymentMethod) {
       let methods;
-      // Handle case where multiple params are passed (e.g., ?paymentMethod=cod&paymentMethod=vnpay)
       if (Array.isArray(paymentMethod)) {
         methods = paymentMethod;
       } else {
-        // Handle comma-separated string (e.g., ?paymentMethod=cod,vnpay)
         methods = paymentMethod.split(',').map(m => m.trim());
       }
       filter.paymentMethod = { $in: methods };
     }
     
-    console.log('Get all orders filter:', JSON.stringify(filter, null, 2));
     if (search) {
       filter.$or = [
         { orderNumber: { $regex: search, $options: 'i' } },
@@ -425,18 +385,11 @@ const getAllOrders = async (req, res) => {
     }
 
     const [orders, total] = await Promise.all([
-      Order.find(filter)
-        .populate('items.productId')
-        .populate({
-          path: 'userId',
-          select: '_id username email'
-        })
-        .populate('discountVoucherId')
-        .populate('shippingVoucherId')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Order.countDocuments(filter)
+      orderDao.findAll(filter, {
+        skip,
+        limit: parseInt(limit)
+      }),
+      orderDao.count(filter)
     ]);
 
     res.json({
@@ -465,7 +418,7 @@ const updateOrderStatus = async (req, res) => {
     const { orderId } = req.params;
     const { orderStatus, paymentStatus } = req.body;
 
-    const order = await Order.findById(orderId);
+    const order = await orderDao.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -477,7 +430,6 @@ const updateOrderStatus = async (req, res) => {
     if (orderStatus) {
       order.orderStatus = orderStatus;
       
-      // Update tracking timestamps
       if (orderStatus === 'shipping' && !order.shippedAt) {
         order.shippedAt = new Date();
       } else if (orderStatus === 'delivered' && !order.deliveredAt) {
@@ -492,17 +444,12 @@ const updateOrderStatus = async (req, res) => {
       }
     }
 
-    await order.save();
+    await orderDao.save(order);
 
     // Populate order
-    const updatedOrder = await Order.findById(orderId)
-      .populate('items.productId')
-      .populate({
-        path: 'userId',
-        select: '_id username email'
-      });
+    const updatedOrder = await orderDao.findByIdWithUser(orderId);
 
-    // Send notification to user about order status change
+    // Send notification to user
     try {
       let notificationTitle = 'Cập nhật đơn hàng';
       let notificationMessage = '';
@@ -552,7 +499,6 @@ const updateOrderStatus = async (req, res) => {
       }
     } catch (notifyError) {
       console.error('Error notifying user:', notifyError);
-      // Don't fail the update if notification fails
     }
 
     res.json({
@@ -573,40 +519,11 @@ const updateOrderStatus = async (req, res) => {
 // Get order statistics (Admin)
 const getOrderStatistics = async (req, res) => {
   try {
-    const [
-      totalOrders,
-      pendingOrders,
-      processingOrders,
-      shippingOrders,
-      deliveredOrders,
-      cancelledOrders,
-      totalRevenue
-    ] = await Promise.all([
-      Order.countDocuments(),
-      Order.countDocuments({ orderStatus: 'pending' }),
-      Order.countDocuments({ orderStatus: 'processing' }),
-      Order.countDocuments({ orderStatus: 'shipping' }),
-      Order.countDocuments({ orderStatus: 'delivered' }),
-      Order.countDocuments({ orderStatus: 'cancelled' }),
-      Order.aggregate([
-        { $match: { orderStatus: { $ne: 'cancelled' } } },
-        { $group: { _id: null, total: { $sum: '$total' } } }
-      ])
-    ]);
+    const stats = await orderDao.getStatistics();
 
     res.json({
       success: true,
-      data: {
-        totalOrders,
-        ordersByStatus: {
-          pending: pendingOrders,
-          processing: processingOrders,
-          shipping: shippingOrders,
-          delivered: deliveredOrders,
-          cancelled: cancelledOrders
-        },
-        totalRevenue: totalRevenue[0]?.total || 0
-      }
+      data: stats
     });
   } catch (error) {
     console.error('Get order statistics error:', error);
@@ -654,10 +571,7 @@ const buyNow = async (req, res) => {
     }
 
     // Get product
-    const product = await Product.findById(productId).populate({
-      path: 'images',
-      match: { isPrimary: true }
-    });
+    const product = await productDao.findByIdWithImages(productId);
 
     if (!product) {
       return res.status(404).json({
@@ -685,10 +599,7 @@ const buyNow = async (req, res) => {
     const subtotal = parseFloat(product.price) * quantity;
 
     // Initialize pricing
-    // Initialize pricing
-    let shippingFee = 30000; // Default shipping fee (30,000 VND)
-
-    // Free shipping for orders over 500,000 VND
+    let shippingFee = 30000;
     if (subtotal > 500000) {
       shippingFee = 0;
     }
@@ -701,11 +612,9 @@ const buyNow = async (req, res) => {
     if (voucherIds && Array.isArray(voucherIds) && voucherIds.length > 0) {
       for (const vId of voucherIds) {
         try {
-          const voucher = await Voucher.findById(vId);
+          const voucher = await voucherDao.findById(vId, false);
 
           if (!voucher) continue;
-
-          // Basic Validate logic
           if (!voucher.isActive) continue;
           
           const now = new Date();
@@ -715,14 +624,7 @@ const buyNow = async (req, res) => {
           if (subtotal < parseFloat(voucher.minOrderAmount)) continue;
 
           // Check if user has already used this voucher
-          const existingUsage = await Order.findOne({
-            userId,
-            orderStatus: { $ne: 'cancelled' },
-            $or: [
-              { discountVoucherId: voucher._id },
-              { shippingVoucherId: voucher._id }
-            ]
-          });
+          const existingUsage = await orderDao.hasUserUsedVoucher(userId, voucher._id);
 
           if (existingUsage) {
             return res.status(400).json({
@@ -740,14 +642,13 @@ const buyNow = async (req, res) => {
             }
             discount += d;
           } else if (voucher.type === 'FREE_SHIP' && !shippingVoucherId) {
-            // Only apply shipping voucher if shipping fee is not already 0
             if (shippingFee > 0) {
               shippingVoucherId = voucher._id;
               shippingFee = 0;
             }
           }
         } catch (err) {
-            console.log('Error applying voucher id:', vId, err.message);
+          console.log('Error applying voucher id:', vId, err.message);
         }
       }
     }
@@ -759,12 +660,12 @@ const buyNow = async (req, res) => {
     let isUnique = false;
     while (!isUnique) {
       orderNumber = generateOrderNumber();
-      const existing = await Order.findOne({ orderNumber });
+      const existing = await orderDao.findByOrderNumber(orderNumber);
       if (!existing) isUnique = true;
     }
 
     // Create order
-    const order = await Order.create({
+    const order = await orderDao.create({
       orderNumber,
       userId,
       customerName,
@@ -780,8 +681,7 @@ const buyNow = async (req, res) => {
       shippingFee,
       discount,
       total,
-      discountVoucherId,
-      shippingVoucherId,
+      voucherId: discountVoucherId || shippingVoucherId,
       items: [{
         productId: product._id,
         productName: product.name,
@@ -793,27 +693,23 @@ const buyNow = async (req, res) => {
     });
 
     // Update product stock
-    await Product.findByIdAndUpdate(
-      product._id,
-      { $inc: { stock: -quantity } }
-    );
+    await productDao.updateStock(product._id, -quantity);
 
     // Update voucher usage count
     if (discountVoucherId) {
-      await Voucher.findByIdAndUpdate(discountVoucherId, { $inc: { usedCount: 1 } });
+      await voucherDao.incrementUsageCount(discountVoucherId);
     }
     if (shippingVoucherId) {
-      await Voucher.findByIdAndUpdate(shippingVoucherId, { $inc: { usedCount: 1 } });
+      await voucherDao.incrementUsageCount(shippingVoucherId);
     }
 
     // Populate order
     await order.populate([
       { path: 'items.productId' },
-      { path: 'discountVoucherId' },
-      { path: 'shippingVoucherId' }
+      { path: 'voucherId' }
     ]);
 
-    // Notify admin about new order (real-time)
+    // Notify admin
     try {
       await notifyAdmin(
         'ORDER_CREATED',
@@ -823,7 +719,6 @@ const buyNow = async (req, res) => {
       );
     } catch (notifyError) {
       console.error('Error notifying admin:', notifyError);
-      // Don't fail the order creation if notification fails
     }
 
     res.status(201).json({
