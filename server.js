@@ -36,6 +36,7 @@ app.use(passport.initialize());
 
 // Routes
 app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/users', require('./routes/user.routes'));
 app.use('/api/categories', require('./routes/category.routes'));
 app.use('/api/products', require('./routes/product.routes'));
 app.use('/api/upload', require('./routes/upload.routes'));
