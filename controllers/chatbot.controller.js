@@ -293,7 +293,7 @@ const sendMessage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau! 📞',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message // Always return error for debugging
     });
   }
 };
