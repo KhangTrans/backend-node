@@ -10,6 +10,7 @@ const productDao = require('./product.dao');
 const notificationDao = require('./notification.dao');
 const voucherDao = require('./voucher.dao');
 const orderDao = require('./order.dao');
+const settingsDao = require('./settings.dao');
 
 module.exports = {
   addressDao,
@@ -19,5 +20,6 @@ module.exports = {
   productDao,
   notificationDao,
   voucherDao,
-  orderDao
+  orderDao,
+  settingsDao
 };
