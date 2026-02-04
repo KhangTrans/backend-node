@@ -140,7 +140,7 @@ const orderSchema = new mongoose.Schema({
 // Indexes
 orderSchema.index({ userId: 1 });
 orderSchema.index({ voucherId: 1 });
-orderSchema.index({ orderNumber: 1 });
+
 orderSchema.index({ orderStatus: 1 });
 orderSchema.index({ createdAt: -1 });
 

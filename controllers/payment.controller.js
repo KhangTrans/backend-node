@@ -1,47 +1,13 @@
-const orderDao = require('../dao/order.dao');
-const cartDao = require('../dao/cart.dao');
-const productDao = require('../dao/product.dao');
-const vnpay = require('../config/vnpay');
-const zalopay = require('../config/zalopay');
+const paymentService = require('../services/payment.service');
 
 // @desc    Create VNPay payment URL
 // @route   POST /api/payment/vnpay/create
 // @access  Private
 exports.createVNPayPayment = async (req, res) => {
   try {
-    const { orderId, amount, orderInfo, locale } = req.body;
-
-    if (!orderId || !amount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Thiếu thông tin orderId hoặc amount'
-      });
-    }
-
-    // Verify order exists and belongs to user
-    const order = await orderDao.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy đơn hàng'
-      });
-    }
-
-    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Bạn không có quyền thanh toán đơn hàng này'
-      });
-    }
-
-    if (order.paymentStatus === 'paid') {
-      return res.status(400).json({
-        success: false,
-        message: 'Đơn hàng đã được thanh toán'
-      });
-    }
-
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
     // Get client IP
     const forwardedIps = req.headers['x-forwarded-for']?.split(',').map(ip => ip.trim());
     const ipAddr = forwardedIps?.[0] || 
@@ -50,34 +16,22 @@ exports.createVNPayPayment = async (req, res) => {
                    req.ip ||
                    '127.0.0.1';
 
-    const paymentUrl = vnpay.createPaymentUrl(
-      order.orderNumber,
-      parseFloat(order.total),
-      orderInfo || `Thanh toan don hang ${order.orderNumber}`,
-      ipAddr,
-      locale || 'vn'
-    );
-
-    // Save payment info
-    await orderDao.updateById(orderId, {
-      paymentMethod: 'vnpay',
-      paymentStatus: 'pending'
-    });
+    const result = await paymentService.createVNPayPayment(userId, userRole, ipAddr, req.body);
 
     res.status(200).json({
       success: true,
-      data: {
-        paymentUrl,
-        orderId: order.id,
-        orderNumber: order.orderNumber
-      }
+      data: result
     });
   } catch (error) {
     console.error('Create VNPay payment error:', error);
-    res.status(500).json({
+    let status = 500;
+    if (error.message.includes('Thiếu thông tin') || error.message.includes('đã được thanh toán')) status = 400;
+    if (error.message === 'Không tìm thấy đơn hàng') status = 404;
+    if (error.message.includes('quyền')) status = 403;
+
+    res.status(status).json({
       success: false,
-      message: 'Lỗi khi tạo thanh toán VNPay',
-      error: error.message
+      message: error.message || 'Lỗi khi tạo thanh toán VNPay'
     });
   }
 };
@@ -87,62 +41,17 @@ exports.createVNPayPayment = async (req, res) => {
 // @access  Public
 exports.vnpayReturn = async (req, res) => {
   try {
-    let vnp_Params = req.query;
+    const result = await paymentService.handleVNPayReturn(req.query);
 
-    const isValid = vnpay.verifyReturnUrl(vnp_Params);
-
-    if (!isValid) {
-      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=Invalid signature`);
-    }
-
-    const orderId = vnp_Params['vnp_TxnRef'];
-    const responseCode = vnp_Params['vnp_ResponseCode'];
-    const amount = vnp_Params['vnp_Amount'] / 100;
-    const transactionNo = vnp_Params['vnp_TransactionNo'];
-
-    // Find order by orderNumber
-    const order = await orderDao.findByOrderNumber(orderId);
-
-    if (!order) {
-      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=Order not found`);
-    }
-
-    if (responseCode === '00') {
-      console.log(`[VNPay Return] Payment successful for order ${orderId}. Updating status...`);
-      
-      // Update Order Status
-      const updateResult = await orderDao.updateById(order._id, {
-        paymentStatus: 'paid',
-        orderStatus: 'pending',
-        paidAt: new Date(),
-        transactionId: transactionNo
-      });
-      
-      console.log(`[VNPay Return] Update result: ${updateResult.paymentStatus}`);
-
-      // Clear cart on success
-      await cartDao.clearItems(order.userId);
-
-      return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}&orderNumber=${orderId}`);
+    if (result.success) {
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${result.orderId}&orderNumber=${result.orderNumber}`);
     } else {
-      // Payment failed
-      if (order.paymentStatus !== 'failed') {
-        await orderDao.updateById(order._id, {
-          paymentStatus: 'failed',
-          orderStatus: 'cancelled'
-        });
-
-        // Restore stock
-        for (const item of order.items) {
-          await productDao.updateStock(item.productId, item.quantity);
-        }
-      }
-
-      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}&code=${responseCode}`);
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?orderId=${result.orderId}&code=${result.code}`);
     }
   } catch (error) {
     console.error('VNPay return error:', error);
-    return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=System error`);
+    const message = error.message || 'System error';
+    return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=${encodeURIComponent(message)}`);
   }
 };
 
@@ -151,62 +60,8 @@ exports.vnpayReturn = async (req, res) => {
 // @access  Public
 exports.vnpayIPN = async (req, res) => {
   try {
-    let vnp_Params = req.query;
-    const secureHash = vnp_Params['vnp_SecureHash'];
-
-    delete vnp_Params['vnp_SecureHash'];
-    delete vnp_Params['vnp_SecureHashType'];
-
-    vnp_Params = vnpay.sortObject(vnp_Params);
-
-    const isValid = vnpay.verifyReturnUrl({ ...vnp_Params, vnp_SecureHash: secureHash });
-
-    if (!isValid) {
-      return res.status(200).json({ RspCode: '97', Message: 'Invalid signature' });
-    }
-
-    const orderId = vnp_Params['vnp_TxnRef'];
-    const responseCode = vnp_Params['vnp_ResponseCode'];
-    const amount = vnp_Params['vnp_Amount'] / 100;
-
-    const order = await orderDao.findByOrderNumber(orderId);
-
-    if (!order) {
-      return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
-    }
-
-    if (order.paymentStatus === 'paid') {
-      return res.status(200).json({ RspCode: '02', Message: 'Order already confirmed' });
-    }
-
-    if (responseCode === '00') {
-      // Update order
-      await orderDao.updateById(order._id, {
-        paymentStatus: 'paid',
-        orderStatus: 'processing',
-        paidAt: new Date()
-      });
-
-      // Clear cart on success (IPN backup)
-      await cartDao.clearItems(order.userId);
-
-      return res.status(200).json({ RspCode: '00', Message: 'Success' });
-    } else {
-      // Payment failed / Cancelled
-      if (order.paymentStatus !== 'failed') {
-        await orderDao.updateById(order._id, {
-          paymentStatus: 'failed',
-          orderStatus: 'cancelled'
-        });
-
-        // Restore stock
-        for (const item of order.items) {
-          await productDao.updateStock(item.productId, item.quantity);
-        }
-      }
-
-      return res.status(200).json({ RspCode: '00', Message: 'Success' });
-    }
+    const result = await paymentService.handleVNPayIPN(req.query);
+    return res.status(200).json(result);
   } catch (error) {
     console.error('VNPay IPN error:', error);
     return res.status(200).json({ RspCode: '99', Message: 'System error' });
@@ -218,86 +73,25 @@ exports.vnpayIPN = async (req, res) => {
 // @access  Private
 exports.createZaloPayPayment = async (req, res) => {
   try {
-    const { orderId, amount, orderInfo } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-    if (!orderId || !amount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Thiếu thông tin orderId hoặc amount'
-      });
-    }
-
-    // Verify order
-    const order = await orderDao.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy đơn hàng'
-      });
-    }
-
-    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Bạn không có quyền thanh toán đơn hàng này'
-      });
-    }
-
-    if (order.paymentStatus === 'paid') {
-      return res.status(400).json({
-        success: false,
-        message: 'Đơn hàng đã được thanh toán'
-      });
-    }
-
-    // Format items for ZaloPay
-    const items = order.items.map(item => ({
-      itemid: (item.productId?._id || item.productId).toString(),
-      itemname: item.productId?.name || item.productName,
-      itemprice: parseFloat(item.price),
-      itemquantity: item.quantity
-    }));
-
-    const result = await zalopay.createOrder(
-      order.id,
-      parseFloat(order.total),
-      orderInfo || `Thanh toan don hang ${order.orderNumber}`,
-      items
-    );
-
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        message: 'Không thể tạo thanh toán ZaloPay: ' + (result.sub_return_message || result.return_message || 'Lỗi không xác định'),
-        resultCode: result.return_code,
-        error: result
-      });
-    }
-
-    // Save payment info
-    await orderDao.updateById(orderId, {
-      paymentMethod: 'zalopay',
-      paymentStatus: 'pending',
-      transactionId: result.app_trans_id
-    });
+    const result = await paymentService.createZaloPayPayment(userId, userRole, req.body);
 
     res.status(200).json({
       success: true,
-      data: {
-        order_url: result.order_url,
-        zp_trans_token: result.zp_trans_token,
-        app_trans_id: result.app_trans_id,
-        orderId: order.id,
-        orderNumber: order.orderNumber
-      }
+      data: result
     });
   } catch (error) {
     console.error('Create ZaloPay payment error:', error);
-    res.status(500).json({
+    let status = 500;
+    if (error.message.includes('Thiếu thông tin') || error.message.includes('đã được thanh toán') || error.message.includes('Không thể tạo')) status = 400;
+    if (error.message === 'Không tìm thấy đơn hàng') status = 404;
+    if (error.message.includes('quyền')) status = 403;
+
+    res.status(status).json({
       success: false,
-      message: 'Lỗi khi tạo thanh toán ZaloPay',
-      error: error.message
+      message: error.message || 'Lỗi khi tạo thanh toán ZaloPay'
     });
   }
 };
@@ -307,53 +101,7 @@ exports.createZaloPayPayment = async (req, res) => {
 // @access  Public
 exports.zaloPayCallback = async (req, res) => {
   try {
-    let result = {};
-    console.log('ZaloPay callback received:', req.body);
-
-    try {
-      const dataStr = req.body.data;
-      const reqMac = req.body.mac;
-
-      const isValid = zalopay.verifyCallback(dataStr, reqMac);
-
-      if (!isValid) {
-        result.return_code = -1;
-        result.return_message = 'mac not equal';
-      } else {
-        const dataJson = JSON.parse(dataStr);
-        const embed_data = JSON.parse(dataJson.embed_data);
-        const orderId = embed_data.orderId;
-
-        console.log('ZaloPay callback - Order ID:', orderId);
-        console.log('ZaloPay callback - Data:', dataJson);
-
-        // Update order
-        const order = await orderDao.findById(orderId);
-
-        if (!order) {
-          result.return_code = -1;
-          result.return_message = 'Order not found';
-        } else if (order.paymentStatus === 'paid') {
-          result.return_code = 1;
-          result.return_message = 'Order already confirmed';
-        } else {
-          await orderDao.updateById(orderId, {
-            paymentStatus: 'paid',
-            orderStatus: 'processing',
-            paidAt: new Date(),
-            transactionId: dataJson.app_trans_id
-          });
-
-          result.return_code = 1;
-          result.return_message = 'success';
-        }
-      }
-    } catch (ex) {
-      console.error('ZaloPay callback error:', ex);
-      result.return_code = 0;
-      result.return_message = ex.message;
-    }
-
+    const result = await paymentService.handleZaloPayCallback(req.body);
     res.json(result);
   } catch (error) {
     console.error('ZaloPay callback error:', error);
@@ -367,22 +115,10 @@ exports.zaloPayCallback = async (req, res) => {
 exports.getPaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-    const order = await orderDao.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy đơn hàng'
-      });
-    }
-
-    if (order.userId.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Bạn không có quyền xem đơn hàng này'
-      });
-    }
+    const order = await paymentService.getPaymentStatus(orderId, userId, userRole);
 
     res.status(200).json({
       success: true,
@@ -398,10 +134,13 @@ exports.getPaymentStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Get payment status error:', error);
-    res.status(500).json({
+    let status = 500;
+    if (error.message === 'Không tìm thấy đơn hàng') status = 404;
+    if (error.message.includes('quyền')) status = 403;
+
+    res.status(status).json({
       success: false,
-      message: 'Lỗi khi lấy trạng thái thanh toán',
-      error: error.message
+      message: error.message || 'Lỗi khi lấy trạng thái thanh toán'
     });
   }
 };

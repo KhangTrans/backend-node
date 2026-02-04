@@ -66,7 +66,7 @@ const voucherSchema = new mongoose.Schema({
 });
 
 // Indexes
-voucherSchema.index({ code: 1 });
+
 voucherSchema.index({ type: 1 });
 voucherSchema.index({ userId: 1 });
 voucherSchema.index({ isActive: 1 });

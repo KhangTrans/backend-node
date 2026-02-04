@@ -32,6 +32,14 @@ const findAll = async (filter = {}, options = {}) => {
   }
 
   return await query;
+  return await query;
+};
+
+// Find products by query (flexible)
+const find = async (query, selectFields = '', sort = { createdAt: -1 }) => {
+  return await Product.find(query)
+    .select(selectFields)
+    .sort(sort);
 };
 
 // Count products
@@ -132,5 +140,6 @@ module.exports = {
   updateById,
   deleteById,
   updateStock,
-  findByIds
+  findByIds,
+  find
 };

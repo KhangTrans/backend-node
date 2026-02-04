@@ -1,7 +1,142 @@
-const Message = require('../models/Message.model');
-const User = require('../models/User.model');
+const chatService = require('../services/chat.service');
 
 // @desc    Get conversation with another user
+// @route   GET /api/messages/conversation/:userId
+// @access  Private
+exports.getConversation = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await chatService.getConversation(req.user.id, userId, req.query);
+
+    res.json({
+      success: true,
+      data: result.messages,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể lấy lịch sử tin nhắn',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get all conversations for current user
+// @route   GET /api/messages/conversations
+// @access  Private
+exports.getConversations = async (req, res) => {
+  try {
+    const conversations = await chatService.getConversations(req.user.id);
+
+    res.json({
+      success: true,
+      data: conversations,
+    });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể lấy danh sách hội thoại',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Send message (HTTP endpoint, Socket.IO is preferred)
+// @route   POST /api/messages
+// @access  Private
+exports.sendMessage = async (req, res) => {
+  try {
+    const { receiverId, message } = req.body;
+
+    const newMessage = await chatService.sendMessage(req.user.id, receiverId, message);
+
+    // Note: Real-time sending is handled by Socket.IO in config/socket.js
+    // This endpoint is a fallback for non-socket clients
+
+    res.status(201).json({
+      success: true,
+      data: newMessage,
+      message: 'Đã gửi tin nhắn',
+    });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    const status = (error.message === 'Thiếu thông tin người nhận hoặc nội dung tin nhắn' || error.message === 'Không tìm thấy người nhận') ? 400 : 500;
+    
+    res.status(status).json({
+      success: false,
+      message: error.message || 'Không thể gửi tin nhắn',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Mark messages as read
+// @route   PUT /api/messages/read/:senderId
+// @access  Private
+exports.markMessagesAsRead = async (req, res) => {
+  try {
+    const { senderId } = req.params;
+
+    await chatService.markMessagesAsRead(req.user.id, senderId);
+
+    res.json({
+      success: true,
+      message: 'Đã đánh dấu tin nhắn đã đọc',
+    });
+  } catch (error) {
+    console.error('Error marking messages as read:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể đánh dấu tin nhắn đã đọc',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get unread message count
+// @route   GET /api/messages/unread-count
+// @access  Private
+exports.getUnreadCount = async (req, res) => {
+  try {
+    const count = await chatService.getUnreadCount(req.user.id);
+
+    res.json({
+      success: true,
+      data: { count },
+    });
+  } catch (error) {
+    console.error('Error fetching unread count:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể lấy số tin nhắn chưa đọc',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get users for chat (admin gets all users, user gets only admins)
+// @route   GET /api/messages/users
+// @access  Private
+exports.getChatUsers = async (req, res) => {
+  try {
+    const users = await chatService.getChatUsers(req.user.id, req.user.role);
+
+    res.json({
+      success: true,
+      data: users,
+    });
+  } catch (error) {
+    console.error('Error fetching chat users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể lấy danh sách người dùng',
+      error: error.message,
+    });
+  }
+};
 // @route   GET /api/messages/conversation/:userId
 // @access  Private
 exports.getConversation = async (req, res) => {

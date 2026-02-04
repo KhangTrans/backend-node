@@ -1,7 +1,5 @@
-const productDao = require('../dao/product.dao');
+const productService = require('../services/product.service');
 const { validationResult } = require('express-validator');
-const { generateUniqueSlug } = require('../utils/slug');
-const Product = require('../models/Product.model');
 
 // @desc    Create new product
 // @route   POST /api/products
@@ -17,66 +15,8 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    const { 
-      name, 
-      slug: customSlug,
-      description, 
-      price, 
-      stock, 
-      categoryId, 
-      metaTitle,
-      metaDescription,
-      metaKeywords,
-      canonicalUrl,
-      images, 
-      variants 
-    } = req.body;
-
-    // Generate unique slug
-    const slug = customSlug 
-      ? await generateUniqueSlug(customSlug, null, Product)
-      : await generateUniqueSlug(name, null, Product);
-
-    // Prepare product data
-    const productData = {
-      name,
-      slug,
-      description,
-      price: parseFloat(price),
-      stock: parseInt(stock) || 0,
-      categoryId: categoryId || null,
-      metaTitle: metaTitle || name,
-      metaDescription: metaDescription || description?.substring(0, 160),
-      metaKeywords,
-      canonicalUrl,
-      createdBy: req.user.id,
-      images: images && images.length > 0 ? images.map((img, index) => ({
-        imageUrl: img.imageUrl || img,
-        isPrimary: img.isPrimary || index === 0,
-        order: img.order || index
-      })) : [],
-      variants: variants && variants.length > 0 ? variants.map(v => ({
-        name: v.name,
-        sku: v.sku,
-        price: v.price ? parseFloat(v.price) : null,
-        stock: parseInt(v.stock) || 0,
-        color: v.color,
-        size: v.size,
-        material: v.material
-      })) : []
-    };
-
-    // Create product
-    const product = await productDao.create(productData);
-
-    // Populate relations
-    await product.populate([
-      {
-        path: 'createdBy',
-        select: '_id username email'
-      },
-      { path: 'categoryId' }
-    ]);
+    // Service handles all business logic
+    const product = await productService.createProduct(req.body, req.user.id);
 
     res.status(201).json({
       success: true,
@@ -87,8 +27,7 @@ exports.createProduct = async (req, res) => {
     console.error('Create product error:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Error creating product',
-      error: error.message 
+      message: error.message || 'Error creating product'
     });
   }
 };
@@ -103,45 +42,35 @@ exports.getAllProducts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     // Build filter
-    const filter = {
-      isActive: true
-    };
-    
+    const filter = {};
     if (categoryId) {
       filter.categoryId = categoryId;
     }
-    
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
-    }
 
-    // Get products with pagination
-    const [products, total] = await Promise.all([
-      productDao.findAll(filter, {
-        skip,
-        limit: parseInt(limit),
-        sort: { createdAt: -1 }
-      }),
-      productDao.count(filter)
-    ]);
+    // Build options
+    const options = {
+      skip,
+      limit: parseInt(limit),
+      sort: { createdAt: -1 },
+      search
+    };
+
+    // Service handles business logic
+    const result = await productService.getAllProducts(filter, options);
 
     res.status(200).json({
       success: true,
-      count: products.length,
-      total,
-      totalPages: Math.ceil(total / parseInt(limit)),
-      currentPage: parseInt(page),
-      data: products
+      count: result.products.length,
+      total: result.pagination.total,
+      totalPages: result.pagination.totalPages,
+      currentPage: result.pagination.page,
+      data: result.products
     });
   } catch (error) {
     console.error('Get products error:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Error getting products',
-      error: error.message 
+      message: error.message || 'Error getting products'
     });
   }
 };
@@ -153,14 +82,8 @@ exports.getProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const product = await productDao.findById(id);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
+    // Service handles business logic
+    const product = await productService.getProductById(id);
 
     res.status(200).json({
       success: true,
@@ -168,10 +91,10 @@ exports.getProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Get product error:', error);
-    res.status(500).json({ 
+    const statusCode = error.message === 'Product not found' ? 404 : 500;
+    res.status(statusCode).json({ 
       success: false,
-      message: 'Error getting product',
-      error: error.message 
+      message: error.message
     });
   }
 };
@@ -183,14 +106,8 @@ exports.getProductBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const product = await productDao.findBySlug(slug);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
+    // Service handles business logic
+    const product = await productService.getProductBySlug(slug);
 
     res.status(200).json({
       success: true,
@@ -198,10 +115,10 @@ exports.getProductBySlug = async (req, res) => {
     });
   } catch (error) {
     console.error('Get product by slug error:', error);
-    res.status(500).json({ 
+    const statusCode = error.message === 'Product not found' ? 404 : 500;
+    res.status(statusCode).json({ 
       success: false,
-      message: 'Error getting product',
-      error: error.message 
+      message: error.message
     });
   }
 };
@@ -212,96 +129,14 @@ exports.getProductBySlug = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      name, 
-      slug: customSlug,
-      description, 
-      price, 
-      stock, 
-      categoryId, 
-      metaTitle,
-      metaDescription,
-      metaKeywords,
-      canonicalUrl,
-      isActive,
-      images,
-      variants 
-    } = req.body;
 
-    // Check if product exists
-    const existingProduct = await productDao.findById(id, false);
-
-    if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    // Check if user owns the product or is admin
-    if (existingProduct.createdBy !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this product'
-      });
-    }
-
-    // Generate new slug if name changed or custom slug provided
-    let newSlug = existingProduct.slug;
-    if (customSlug || (name && name !== existingProduct.name)) {
-      newSlug = await generateUniqueSlug(
-        customSlug || name, 
-        id, 
-        Product
-      );
-    }
-
-    // Prepare update data
-    const updateData = {};
-    if (name) updateData.name = name;
-    if (newSlug) updateData.slug = newSlug;
-    if (description !== undefined) updateData.description = description;
-    if (price) updateData.price = parseFloat(price);
-    if (stock !== undefined) updateData.stock = parseInt(stock);
-    if (categoryId !== undefined) updateData.categoryId = categoryId || null;
-    if (metaTitle || name) updateData.metaTitle = metaTitle || name;
-    if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
-    if (metaKeywords !== undefined) updateData.metaKeywords = metaKeywords;
-    if (canonicalUrl !== undefined) updateData.canonicalUrl = canonicalUrl;
-    if (isActive !== undefined) updateData.isActive = isActive;
-
-    // Handle images update if provided
-    if (images !== undefined) {
-      if (images && images.length > 0) {
-        updateData.images = images.map((img, index) => ({
-          imageUrl: img.imageUrl || img,
-          isPrimary: img.isPrimary || index === 0,
-          order: img.order !== undefined ? img.order : index
-        }));
-      } else {
-        updateData.images = [];
-      }
-    }
-
-    // Handle variants update if provided
-    if (variants !== undefined) {
-      if (variants && variants.length > 0) {
-        updateData.variants = variants.map(v => ({
-          name: v.name,
-          sku: v.sku,
-          price: v.price ? parseFloat(v.price) : null,
-          stock: parseInt(v.stock) || 0,
-          color: v.color,
-          size: v.size,
-          material: v.material
-        }));
-      } else {
-        updateData.variants = [];
-      }
-    }
-
-    // Update product
-    const product = await productDao.updateById(id, updateData);
+    // Service handles all business logic including authorization
+    const product = await productService.updateProduct(
+      id,
+      req.body,
+      req.user.id,
+      req.user.role
+    );
 
     res.status(200).json({
       success: true,
@@ -310,10 +145,17 @@ exports.updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Update product error:', error);
-    res.status(500).json({ 
+    
+    let statusCode = 500;
+    if (error.message === 'Product not found') statusCode = 404;
+    if (error.message.includes('Not authorized')) statusCode = 403;
+    if (error.message.includes('cannot be empty') || error.message.includes('must be greater')) {
+      statusCode = 400;
+    }
+    
+    res.status(statusCode).json({ 
       success: false,
-      message: 'Error updating product',
-      error: error.message 
+      message: error.message
     });
   }
 };
@@ -325,26 +167,8 @@ exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if product exists
-    const product = await productDao.findById(id, false);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    // Check if user owns the product or is admin
-    if (product.createdBy.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this product'
-      });
-    }
-
-    // Delete product
-    await productDao.deleteById(id);
+    // Service handles all business logic including authorization
+    await productService.deleteProduct(id, req.user.id, req.user.role);
 
     res.status(200).json({
       success: true,
@@ -352,10 +176,14 @@ exports.deleteProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Delete product error:', error);
-    res.status(500).json({ 
+    
+    let statusCode = 500;
+    if (error.message === 'Product not found') statusCode = 404;
+    if (error.message.includes('Not authorized')) statusCode = 403;
+    
+    res.status(statusCode).json({ 
       success: false,
-      message: 'Error deleting product',
-      error: error.message 
+      message: error.message
     });
   }
 };

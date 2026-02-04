@@ -1,7 +1,38 @@
-const Product = require('../models/Product.model');
-const Category = require('../models/Category.model');
+const sitemapService = require('../services/sitemap.service');
 
 // @desc    Generate XML sitemap for SEO
+// @route   GET /api/sitemap.xml
+// @access  Public
+exports.generateSitemap = async (req, res) => {
+  try {
+    const xml = await sitemapService.generateSitemap();
+
+    res.header('Content-Type', 'application/xml');
+    res.status(200).send(xml);
+  } catch (error) {
+    console.error('Sitemap generation error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error generating sitemap',
+      error: error.message 
+    });
+  }
+};
+
+// @desc    Generate robots.txt for SEO
+// @route   GET /robots.txt
+// @access  Public
+exports.generateRobotsTxt = async (req, res) => {
+  try {
+    const txt = sitemapService.generateRobotsTxt();
+
+    res.header('Content-Type', 'text/plain');
+    res.status(200).send(txt);
+  } catch (error) {
+    console.error('Robots.txt generation error:', error);
+    res.status(500).send('User-agent: *\nAllow: /'); // Fallback
+  }
+};
 // @route   GET /api/sitemap.xml
 // @access  Public
 exports.generateSitemap = async (req, res) => {

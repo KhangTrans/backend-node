@@ -29,12 +29,20 @@ const categorySchema = new mongoose.Schema({
     default: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtual populate for products
+categorySchema.virtual('products', {
+  ref: 'Product',
+  localField: '_id',
+  foreignField: 'categoryId'
 });
 
 // Indexes
-categorySchema.index({ slug: 1 });
-categorySchema.index({ name: 1 });
+
 
 const Category = mongoose.model('Category', categorySchema);
 

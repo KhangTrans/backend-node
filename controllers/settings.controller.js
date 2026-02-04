@@ -1,18 +1,23 @@
-const settingsDao = require('../dao/settings.dao');
+const settingsService = require('../services/settings.service');
 
 // @desc    Get all settings
 // @route   GET /api/settings
 // @access  Public
 const getSettings = async (req, res) => {
   try {
-    const settings = await settingsDao.getSettings();
+    // Service handles business logic
+    const settings = await settingsService.getSettings();
+    
     res.status(200).json({
       success: true,
       data: settings
     });
   } catch (error) {
     console.error('Error in getSettings:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -21,7 +26,8 @@ const getSettings = async (req, res) => {
 // @access  Admin
 const updateStore = async (req, res) => {
   try {
-    const updatedSettings = await settingsDao.updateStore(req.body);
+    // Service handles validation and update logic
+    const updatedSettings = await settingsService.updateStore(req.body);
     
     res.status(200).json({
       success: true,
@@ -30,7 +36,11 @@ const updateStore = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in updateStore:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('không hợp lệ') ? 400 : 500;
+    res.status(statusCode).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -39,7 +49,8 @@ const updateStore = async (req, res) => {
 // @access  Admin
 const updateAppearance = async (req, res) => {
   try {
-    const updatedSettings = await settingsDao.updateAppearance(req.body);
+    // Service handles validation and update logic
+    const updatedSettings = await settingsService.updateAppearance(req.body);
 
     res.status(200).json({
       success: true,
@@ -48,7 +59,11 @@ const updateAppearance = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in updateAppearance:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('không hợp lệ') ? 400 : 500;
+    res.status(statusCode).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -60,10 +75,13 @@ const addBanner = async (req, res) => {
     const { imageUrl, publicId, title, link, order, isActive } = req.body;
     
     if (!imageUrl) {
-        return res.status(400).json({ success: false, message: 'Image URL is required' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Image URL is required' 
+      });
     }
 
-    const newBanner = {
+    const bannerData = {
       imageUrl,
       publicId,
       title: title || '',
@@ -72,7 +90,8 @@ const addBanner = async (req, res) => {
       isActive: isActive !== undefined ? isActive : true
     };
     
-    const banners = await settingsDao.addBanner(newBanner);
+    // Service handles validation and creation logic
+    const banners = await settingsService.addBanner(bannerData);
 
     res.status(201).json({
       success: true,
@@ -81,7 +100,11 @@ const addBanner = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in addBanner:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('required') ? 400 : 500;
+    res.status(statusCode).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -90,11 +113,8 @@ const addBanner = async (req, res) => {
 // @access  Admin
 const updateBanner = async (req, res) => {
   try {
-    const banners = await settingsDao.updateBanner(req.params.id, req.body);
-    
-    if (!banners) {
-      return res.status(404).json({ success: false, message: 'Banner not found' });
-    }
+    // Service handles validation and update logic
+    const banners = await settingsService.updateBanner(req.params.id, req.body);
 
     res.status(200).json({
       success: true,
@@ -103,7 +123,11 @@ const updateBanner = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in updateBanner:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('not found') ? 404 : 500;
+    res.status(statusCode).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -112,11 +136,8 @@ const updateBanner = async (req, res) => {
 // @access  Admin
 const deleteBanner = async (req, res) => {
   try {
-    const banners = await settingsDao.deleteBanner(req.params.id);
-    
-    if (!banners) {
-        return res.status(404).json({ success: false, message: 'Banner not found' });
-    }
+    // Service handles validation and deletion logic
+    const banners = await settingsService.deleteBanner(req.params.id);
 
     res.status(200).json({
       success: true,
@@ -125,7 +146,11 @@ const deleteBanner = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in deleteBanner:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('not found') ? 404 : 500;
+    res.status(statusCode).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 

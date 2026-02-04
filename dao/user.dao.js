@@ -33,6 +33,13 @@ const findAll = async (selectFields = '-password', sortBy = { createdAt: -1 }) =
     .sort(sortBy);
 };
 
+// Find users by query
+const find = async (query, selectFields = '-password', sortBy = { createdAt: -1 }) => {
+  return await User.find(query)
+    .select(selectFields)
+    .sort(sortBy);
+};
+
 // Create new user
 const create = async (userData) => {
   return await User.create(userData);
@@ -84,6 +91,7 @@ module.exports = {
   updateById,
   addSavedVoucher,
   hasSavedVoucher,
-  findByIdWithVouchers
+  findByIdWithVouchers,
+  find
 };
 

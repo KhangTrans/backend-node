@@ -108,11 +108,12 @@ const findByIdWithProducts = async (orderId) => {
 
 // Check if user has used voucher
 const hasUserUsedVoucher = async (userId, vId) => {
-  return await Order.findOne({
+  const order = await Order.findOne({
     userId,
     orderStatus: { $ne: 'cancelled' },
     voucherId: vId
   });
+  return !!order; // Return boolean
 };
 
 // Count orders with voucher

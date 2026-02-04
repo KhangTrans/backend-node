@@ -71,9 +71,7 @@ const userSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Index cho performance
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
+
 
 // Hash password trước khi save
 userSchema.pre('save', async function() {

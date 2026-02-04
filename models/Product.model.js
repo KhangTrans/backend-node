@@ -106,7 +106,7 @@ const productSchema = new mongoose.Schema({
 });
 
 // Indexes
-productSchema.index({ slug: 1 });
+
 productSchema.index({ categoryId: 1 });
 productSchema.index({ createdBy: 1 });
 productSchema.index({ name: 'text', description: 'text' });
