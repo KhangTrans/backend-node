@@ -1,5 +1,4 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns').promises;
 
 const sendVerificationEmail = async (to, token) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -21,34 +20,24 @@ const sendVerificationEmail = async (to, token) => {
   };
 
   try {
-    // Manually resolve IPv4 address to avoid ENETUNREACH on IPv6-enabled servers
-    const addresses = await dns.resolve4('smtp.gmail.com');
-    const gmailIp = addresses[0];
-    console.log(`Resolved Gmail SMTP IPv4: ${gmailIp}`);
-
+    // Configure Postmark SMTP
     const transporter = nodemailer.createTransport({
-      host: gmailIp, // Connect to IP directly
-      port: 465, // Try Port 465 again with IPv4
-      secure: true,
+      host: 'smtp.postmarkapp.com', // Postmark SMTP Server
+      port: 587,
+      secure: false, // TLS
       auth: {
-        user: process.env.SMTP_EMAIL,
+        // Postmark requires API Token as both username and password
+        // We will misuse SMTP_PASSWORD env var to store this Token
+        user: process.env.SMTP_PASSWORD, 
         pass: process.env.SMTP_PASSWORD
-      },
-      tls: {
-        servername: 'smtp.gmail.com',
-        rejectUnauthorized: false
-      },
-      // Increase timeouts for cloud environments
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 10000,   // 10 seconds
-      socketTimeout: 10000      // 10 seconds
+      }
     });
 
     await transporter.sendMail(message);
     console.log('Verification email sent to:', to);
   } catch (error) {
     console.error('Error sending email:', error);
-    throw new Error('Email could not be sent');
+    throw new Error('Gửi email xác thực thất bại. Vui lòng thử lại sau.');
   }
 };
 
