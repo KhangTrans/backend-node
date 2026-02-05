@@ -55,6 +55,16 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: {
+    type: String
+  },
+  emailVerificationExpires: {
+    type: Date
+  },
   savedVouchers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Voucher'

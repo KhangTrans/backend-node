@@ -62,6 +62,11 @@ router.get('/me', protect, authController.getMe);
 // @access  Public
 router.get('/users', authController.getAllUsers);
 
+// @route   POST /api/auth/verify-email
+// @desc    Verify email address
+// @access  Public
+router.post('/verify-email', authController.verifyEmail);
+
 // ==================== Google OAuth Routes ====================
 
 // @route   GET /api/auth/google

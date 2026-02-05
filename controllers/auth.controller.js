@@ -20,7 +20,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: result.message || 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực.',
       data: {
         user: {
           id: result.user._id,
@@ -28,8 +28,7 @@ exports.register = async (req, res) => {
           email: result.user.email,
           fullName: result.user.fullName,
           role: result.user.role
-        },
-        token: result.token
+        }
       }
     });
   } catch (error) {
@@ -202,6 +201,46 @@ exports.googleTokenLogin = async (req, res) => {
     res.status(status).json({
       success: false,
       message: error.message || 'Error logging in with Google',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Verify email address
+// @route   POST /api/auth/verify-email
+// @access  Public
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body; // Expecting token in body from frontend
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cần có mã xác thực'
+      });
+    }
+
+    const result = await authService.verifyEmail(token);
+
+    res.status(200).json({
+      success: true,
+      message: 'Xác thực email thành công',
+      data: {
+        user: {
+           id: result.user._id,
+           username: result.user.username,
+           email: result.user.email,
+           fullName: result.user.fullName,
+           role: result.user.role
+        },
+        token: result.token
+      }
+    });
+  } catch (error) {
+    console.error('Verify email error:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Link xác thực không hợp lệ hoặc đã hết hạn',
       error: error.message
     });
   }

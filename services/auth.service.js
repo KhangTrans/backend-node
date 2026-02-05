@@ -5,6 +5,8 @@
 
 const userDao = require('../dao/user.dao');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const emailService = require('./email.service');
 
 // Generate JWT Token
 const generateToken = (userId) => {
@@ -28,18 +30,33 @@ const register = async (userData) => {
     throw new Error('Username or email already exists');
   }
 
+  // Generate verification token
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const verificationTokenExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
+
   // Create new user (password will be hashed by model pre-save hook)
   const user = await userDao.create({
     username,
     email,
     password,
-    fullName
+    fullName,
+    emailVerificationToken: verificationToken,
+    emailVerificationExpires: verificationTokenExpires,
+    isEmailVerified: false
   });
 
-  // Generate token
-  const token = generateToken(user._id);
+  // Send verification email
+  try {
+    await emailService.sendVerificationEmail(email, verificationToken);
+  } catch (error) {
+    // If email fails, we might want to delete the user or handle it.
+    // For now, we'll just log it, but ideally we should rollback.
+    // But since this is a simple implementation:
+    console.error('Failed to send verification email:', error);
+  }
 
-  return { user, token };
+  // Do not return token yet, user must verify email
+  return { user, message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.' };
 };
 
 /**
@@ -59,6 +76,11 @@ const login = async (email, password) => {
   // Check if user is active
   if (!user.isActive) {
     throw new Error('Account has been deactivated');
+  }
+
+  // Check if email is verified
+  if (!user.isEmailVerified) {
+    throw new Error('Vui lòng xác thực email trước khi đăng nhập');
   }
 
   // Verify password using model method
@@ -157,10 +179,43 @@ const generateUserToken = (user) => {
   return generateToken(user._id);
 };
 
+/**
+ * Verify email with token
+ * @param {string} token
+ * @returns {Object} { user, token }
+ */
+const verifyEmail = async (token) => {
+  // Find user with matching token and unexpired date
+  // Using generic find from DAO since we don't have findOneByToken
+  const users = await userDao.find({
+    emailVerificationToken: token,
+    emailVerificationExpires: { $gt: Date.now() }
+  });
+
+  if (!users || users.length === 0) {
+    throw new Error('Link xác thực không hợp lệ hoặc đã hết hạn');
+  }
+
+  const user = users[0];
+
+  // Update user as verified and clear token
+  const updatedUser = await userDao.updateById(user._id, {
+    isEmailVerified: true,
+    emailVerificationToken: null,
+    emailVerificationExpires: null
+  });
+
+  // Generate token for auto-login after verification
+  const jwtToken = generateToken(updatedUser._id);
+
+  return { user: updatedUser, token: jwtToken };
+};
+
 module.exports = {
   register,
   login,
   getCurrentUser,
   googleLogin,
-  generateUserToken
+  generateUserToken,
+  verifyEmail
 };
