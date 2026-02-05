@@ -28,16 +28,20 @@ const sendVerificationEmail = async (to, token) => {
 
     const transporter = nodemailer.createTransport({
       host: gmailIp, // Connect to IP directly
-      port: 587,
-      secure: false,
+      port: 465, // Try Port 465 again with IPv4
+      secure: true,
       auth: {
         user: process.env.SMTP_EMAIL,
         pass: process.env.SMTP_PASSWORD
       },
       tls: {
-        servername: 'smtp.gmail.com', // Required when using IP address
+        servername: 'smtp.gmail.com',
         rejectUnauthorized: false
-      }
+      },
+      // Increase timeouts for cloud environments
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,   // 10 seconds
+      socketTimeout: 10000      // 10 seconds
     });
 
     await transporter.sendMail(message);
