@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
 
 const sendVerificationEmail = async (to, token) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -20,9 +21,14 @@ const sendVerificationEmail = async (to, token) => {
   };
 
   try {
+    // Resolve IPv4 for Postmark
+    const addresses = await dns.resolve4('smtp.postmarkapp.com');
+    const postmarkIp = addresses[0];
+    console.log('Postmark IPv4:', postmarkIp);
+
     // Configure Postmark SMTP
     const transporter = nodemailer.createTransport({
-      host: 'smtp.postmarkapp.com', // Postmark SMTP Server
+      host: postmarkIp, 
       port: 587,
       secure: false, // TLS
       auth: {
@@ -30,6 +36,9 @@ const sendVerificationEmail = async (to, token) => {
         // We will misuse SMTP_PASSWORD env var to store this Token
         user: process.env.SMTP_PASSWORD, 
         pass: process.env.SMTP_PASSWORD
+      },
+      tls: {
+        servername: 'smtp.postmarkapp.com' // Explicitly set servername for TLS SNI
       }
     });
 
