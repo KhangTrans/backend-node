@@ -1,12 +1,21 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Force IPv4 for DNS lookups
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // use SSL
   auth: {
     user: process.env.SMTP_EMAIL,
     pass: process.env.SMTP_PASSWORD
   },
-  family: 4 // Force IPv4 to avoid ENETUNREACH errors on some cloud servers
+  tls: {
+    // do not fail on invalid certs
+    rejectUnauthorized: false
+  }
 });
 
 const sendVerificationEmail = async (to, token) => {
