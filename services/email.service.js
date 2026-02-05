@@ -29,7 +29,7 @@ const sendVerificationEmail = async (to, token) => {
     // Configure Postmark SMTP
     const transporter = nodemailer.createTransport({
       host: postmarkIp, 
-      port: 587,
+      port: 2525,
       secure: false, // TLS
       auth: {
         // Postmark requires API Token as both username and password
