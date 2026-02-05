@@ -4,6 +4,7 @@
  */
 
 const userDao = require('../dao/user.dao');
+const User = require('../models/User.model');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('./email.service');
@@ -46,13 +47,14 @@ const register = async (userData) => {
   });
 
   // Send verification email
+  // Send verification email
   try {
     await emailService.sendVerificationEmail(email, verificationToken);
   } catch (error) {
-    // If email fails, we might want to delete the user or handle it.
-    // For now, we'll just log it, but ideally we should rollback.
-    // But since this is a simple implementation:
     console.error('Failed to send verification email:', error);
+    // Rollback: Delete the user we just created so they can try again
+    await User.findByIdAndDelete(user._id);
+    throw new Error('Gửi email xác thực thất bại. Vui lòng thử lại sau. (' + error.message + ')');
   }
 
   // Do not return token yet, user must verify email
