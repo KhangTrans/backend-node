@@ -1,11 +1,12 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // Hoặc host/port của SMTP server khác
+  service: 'gmail',
   auth: {
     user: process.env.SMTP_EMAIL,
     pass: process.env.SMTP_PASSWORD
-  }
+  },
+  family: 4 // Force IPv4 to avoid ENETUNREACH errors on some cloud servers
 });
 
 const sendVerificationEmail = async (to, token) => {
