@@ -41,8 +41,18 @@ const sendVerificationEmail = async (to, token) => {
     console.log('Postmark Response:', response.data);
 
   } catch (error) {
-    console.error('Error sending email via Postmark API:', error.response?.data || error.message);
-    throw new Error('Gửi email xác thực thất bại. Vui lòng thử lại sau.');
+    const postmarkError = error.response?.data;
+    console.error('Error sending email via Postmark API:', postmarkError || error.message);
+    
+    // Construct a more detailed error message
+    let errorMessage = 'Gửi email xác thực thất bại.';
+    if (postmarkError && postmarkError.Message) {
+      errorMessage += ` (Lỗi Postmark: ${postmarkError.Message})`;
+    } else {
+       errorMessage += ' Vui lòng thử lại sau.';
+    }
+
+    throw new Error(errorMessage);
   }
 };
 
