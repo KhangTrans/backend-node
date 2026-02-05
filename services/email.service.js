@@ -1,22 +1,5 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns');
-
-// Force IPv4 for DNS lookups
-dns.setDefaultResultOrder('ipv4first');
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD
-  },
-  tls: {
-    // do not fail on invalid certs
-    rejectUnauthorized: false
-  }
-});
+const dns = require('dns').promises;
 
 const sendVerificationEmail = async (to, token) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -38,6 +21,25 @@ const sendVerificationEmail = async (to, token) => {
   };
 
   try {
+    // Manually resolve IPv4 address to avoid ENETUNREACH on IPv6-enabled servers
+    const addresses = await dns.resolve4('smtp.gmail.com');
+    const gmailIp = addresses[0];
+    console.log(`Resolved Gmail SMTP IPv4: ${gmailIp}`);
+
+    const transporter = nodemailer.createTransport({
+      host: gmailIp, // Connect to IP directly
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD
+      },
+      tls: {
+        servername: 'smtp.gmail.com', // Required when using IP address
+        rejectUnauthorized: false
+      }
+    });
+
     await transporter.sendMail(message);
     console.log('Verification email sent to:', to);
   } catch (error) {
