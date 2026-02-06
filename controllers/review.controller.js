@@ -13,7 +13,15 @@ exports.createReview = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating review:', error);
-    res.status(error.message === 'Bạn đã đánh giá sản phẩm này rồi' ? 400 : 500).json({ 
+    
+    let statusCode = 500;
+    if (error.message === 'Bạn đã đánh giá sản phẩm này rồi') {
+        statusCode = 400;
+    } else if (error.message === 'Bạn cần mua và nhận sản phẩm này thành công mới có thể đánh giá.') {
+        statusCode = 403; // Forbidden
+    }
+
+    res.status(statusCode).json({ 
       success: false, 
       message: error.message || 'Server error' 
     });
