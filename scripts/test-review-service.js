@@ -47,6 +47,35 @@ const testReviewFeature = async () => {
     });
     console.log('✅ Created Admin:', adminUser.username);
 
+    // 1c. Create Order (Delivered) to allow review
+    const Order = require('../models/Order.model');
+    const order = await Order.create({
+        userId: testUser._id,
+        orderNumber: `TEST-${Date.now()}`,
+        items: [{
+            productId: testProduct._id,
+            productName: testProduct.name,
+            price: testProduct.price,
+            quantity: 1,
+            subtotal: testProduct.price
+        }],
+        // Customer Info
+        customerName: testUser.fullName,
+        customerEmail: testUser.email,
+        customerPhone: "0123456789",
+        // Shipping
+        shippingAddress: "123 Test St",
+        shippingCity: "Test City",
+        // Payment
+        paymentMethod: "cod",
+        paymentStatus: "paid",
+        orderStatus: "delivered", // Must be delivered
+        // Pricing
+        subtotal: testProduct.price,
+        total: testProduct.price
+    });
+    console.log('✅ Created Delivered Order:', order.orderNumber);
+
     // 2. Test Add Review (Should notify admin)
     console.log('\n📝 Testing Add Review...');
     const review1 = await reviewService.addReview(
@@ -127,6 +156,7 @@ const testReviewFeature = async () => {
     console.log('\n🧹 Cleaning up...');
     if(testProduct) await Review.deleteMany({ product: testProduct._id });
     if(testProduct) await Product.findByIdAndDelete(testProduct._id);
+    if(testUser) await Order.deleteMany({ userId: testUser._id }); // Delete test orders
     if(testUser) await User.findByIdAndDelete(testUser._id);
     if(adminUser) await User.findByIdAndDelete(adminUser._id);
     await Notification.deleteMany({ userId: { $in: [testUser?._id, adminUser?._id] } });

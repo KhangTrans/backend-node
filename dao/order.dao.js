@@ -186,6 +186,18 @@ const updateStatus = async (orderId, orderStatus, paymentStatus = null) => {
   );
 };
 
+// Check if user has purchased and received a product
+const hasPurchasedProduct = async (userId, productId) => {
+  const order = await Order.findOne({
+    userId,
+    orderStatus: 'delivered',
+    items: {
+      $elemMatch: { productId: productId }
+    }
+  });
+  return !!order;
+};
+
 module.exports = {
   findAll,
   count,
@@ -201,5 +213,7 @@ module.exports = {
   hasUserUsedVoucher,
   countWithVoucher,
   getStatistics,
-  updateStatus
+  getStatistics,
+  updateStatus,
+  hasPurchasedProduct
 };

@@ -1,8 +1,15 @@
 const reviewDao = require('../dao/review.dao');
 const notificationService = require('./notification.service');
 const userDao = require('../dao/user.dao');
+const orderDao = require('../dao/order.dao');
 
 const addReview = async (userId, productId, rating, comment) => {
+  // Check if user purchased this product
+  const hasPurchased = await orderDao.hasPurchasedProduct(userId, productId);
+  if (!hasPurchased) {
+    throw new Error('Bạn cần mua và nhận sản phẩm này thành công mới có thể đánh giá.');
+  }
+
   // Check if user already reviewed
   const existingReview = await reviewDao.findByUserAndProduct(userId, productId);
   if (existingReview) {
