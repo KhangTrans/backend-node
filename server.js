@@ -48,6 +48,7 @@ app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/messages', require('./routes/chat.routes'));
 app.use('/api/chatbot', require('./routes/chatbot.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
+app.use('/api/reviews', require('./routes/review.routes'));
 
 // Payment routes - Load on all environments
 app.use('/api/payment', require('./routes/payment.routes'));

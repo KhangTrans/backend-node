@@ -133,15 +133,7 @@ const initializeSocket = (server) => {
       try {
         const { notificationId } = data;
 
-        await prisma.notification.update({
-          where: {
-            id: parseInt(notificationId),
-            userId: socket.userId,
-          },
-          data: {
-            isRead: true,
-          },
-        });
+        await Notification.findByIdAndUpdate(notificationId, { isRead: true });
 
         socket.emit('notification_marked_read', { notificationId });
       } catch (error) {
@@ -200,9 +192,9 @@ const createNotification = async (userId, type, title, message, orderId = null) 
     });
 
     // Gửi real-time notification cho user
-    const socketId = userSockets.get(userId);
-    if (socketId && io) {
-      io.to(socketId).emit('new_notification', notification);
+    // Gửi real-time notification cho user (qua Room để support nhiều tab)
+    if (io) {
+      io.to(`user:${userId.toString()}`).emit('new_notification', notification);
     }
 
     return notification;

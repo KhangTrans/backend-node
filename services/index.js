@@ -18,6 +18,7 @@ const notificationService = require('./notification.service');
 const sitemapService = require('./sitemap.service');
 const uploadService = require('./upload.service');
 const paymentService = require('./payment.service');
+const reviewService = require('./review.service');
 
 module.exports = {
   settingsService,
@@ -34,5 +35,6 @@ module.exports = {
   notificationService,
   sitemapService,
   uploadService,
-  paymentService
+  paymentService,
+  reviewService
 };

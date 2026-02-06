@@ -112,11 +112,48 @@ const clearReadNotifications = async (userId) => {
   return true;
 };
 
+/**
+ * Send notification to a specific user
+ * @param {string} userId 
+ * @param {string} title 
+ * @param {string} message 
+ * @param {string} type 
+ * @param {string} link 
+ */
+const sendNotification = async (userId, title, message, type = 'system', link = null) => {
+  const notification = await notificationDao.create({
+    userId,
+    title,
+    message,
+    type,
+    link,
+    isRead: false,
+    createdAt: new Date()
+  });
+
+  // Try to send via Socket.IO if available
+  try {
+    const { getIO } = require('../config/socket');
+    const io = getIO();
+    if (io) {
+      // Use 'user:' prefix as defined in socket.js
+      io.to(`user:${userId.toString()}`).emit('new_notification', notification);
+    }
+  } catch (error) {
+    // Socket might not be initialized or required correctly, ignore error
+    // console.warn('Socket notification failed:', error.message);
+  }
+
+  return notification;
+};
+
+
 module.exports = {
   getNotifications,
   getUnreadCount,
   markAsRead,
   markAllAsRead,
   deleteNotification,
-  clearReadNotifications
+  clearReadNotifications,
+  sendNotification
 };

@@ -16,7 +16,10 @@ const notificationSchema = new mongoose.Schema({
       'ORDER_CANCELLED',
       'PAYMENT_CONFIRMED',
       'NEW_MESSAGE',
-      'SYSTEM'
+      'NEW_MESSAGE',
+      'SYSTEM',
+      'REVIEW_CREATED',
+      'REVIEW_REPLY'
     ],
     required: true
   },
