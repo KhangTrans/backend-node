@@ -86,19 +86,50 @@ const testReviewFeature = async () => {
     // 4. Test Get Reviews (Should include reply)
     console.log('\n🔍 Testing Get Product Reviews...');
     const reviews = await reviewService.getReviewsByProduct(testProduct._id);
+    
+    // In ra cấu trúc dữ liệu thực tế để kiểm tra
+    console.log('📦 Data Review trả về:', JSON.stringify(reviews, null, 2));
+
+    if(reviews.length > 0 && reviews[0].user && reviews[0].user.username) {
+         console.log('✅ Đã populate thông tin User:', reviews[0].user.username);
+    }
+    
     if(reviews[0].reply && reviews[0].reply.comment) {
-        console.log('✅ Review contains reply:', reviews[0].reply.comment);
+        console.log('✅ Review chứa phản hồi của Admin:', reviews[0].reply.comment);
     } else {
         console.error('❌ Review missing reply in fetch');
     }
 
+    // 5. Test Admin Get All Reviews
+    console.log('\n👮‍♀️ Testing Admin Get All Reviews...');
+    const allReviews = await reviewService.getAllReviews({ page: 1, limit: 10 });
+    console.log(`✅ Admin fetched ${allReviews.pagination.total} reviews.`);
+    const foundReview = allReviews.reviews.find(r => r._id.toString() === review1._id.toString());
+    if (foundReview) {
+        console.log('✅ Found the new review in Admin List.');
+    } else {
+        console.error('❌ New review NOT found in Admin List.');
+    }
+
+    // 6. Test Admin Delete Review
+    console.log('\n❌ Testing Admin Delete Review...');
+    await reviewService.deleteReview(review1._id);
+    
+    // Verify deletion
+    const deletedReview = await Review.findById(review1._id);
+    if (!deletedReview) {
+        console.log('✅ Review successfully deleted from DB.');
+    } else {
+        console.error('❌ Review still exists in DB!');
+    }
+
     // Cleanup
     console.log('\n🧹 Cleaning up...');
-    await Review.deleteMany({ product: testProduct._id });
-    await Product.findByIdAndDelete(testProduct._id);
-    await User.findByIdAndDelete(testUser._id);
-    await User.findByIdAndDelete(adminUser._id);
-    await Notification.deleteMany({ userId: { $in: [testUser._id, adminUser._id] } });
+    if(testProduct) await Review.deleteMany({ product: testProduct._id });
+    if(testProduct) await Product.findByIdAndDelete(testProduct._id);
+    if(testUser) await User.findByIdAndDelete(testUser._id);
+    if(adminUser) await User.findByIdAndDelete(adminUser._id);
+    await Notification.deleteMany({ userId: { $in: [testUser?._id, adminUser?._id] } });
     console.log('✅ Cleanup done.');
 
   } catch (error) {

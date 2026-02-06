@@ -36,11 +36,28 @@ const getStatsByProduct = async (productId) => {
 };
 
 const findById = async (id) => {
-  return await Review.findById(id).populate('user', 'username fullName avatar');
+  return await Review.findById(id).populate('user', 'username fullName avatar').populate('product', 'name slug images');
 };
 
 const updateById = async (id, updateData) => {
   return await Review.findByIdAndUpdate(id, updateData, { new: true }).populate('user', 'username fullName avatar');
+};
+
+const findAll = async (filter, skip, limit) => {
+  return await Review.find(filter)
+    .populate('user', 'username fullName avatar')
+    .populate('product', 'name slug images')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+};
+
+const count = async (filter) => {
+  return await Review.countDocuments(filter);
+};
+
+const deleteById = async (id) => {
+  return await Review.findByIdAndDelete(id);
 };
 
 module.exports = {
@@ -49,5 +66,8 @@ module.exports = {
   findByProduct,
   getStatsByProduct,
   findById,
-  updateById
+  updateById,
+  findAll,
+  count,
+  deleteById
 };

@@ -8,6 +8,16 @@ const { protect, authorize } = require('../middleware/auth.middleware');
 // @access  Private
 router.post('/', protect, reviewController.createReview);
 
+// @route   GET /api/reviews/admin/all
+// @desc    Get all reviews (Admin only)
+// @access  Private/Admin
+router.get('/admin/all', protect, authorize('admin'), reviewController.getAllReviews);
+
+// @route   DELETE /api/reviews/:reviewId
+// @desc    Delete a review (Admin only)
+// @access  Private/Admin
+router.delete('/:reviewId', protect, authorize('admin'), reviewController.deleteReview);
+
 // @route   GET /api/reviews/:productId
 // @desc    Get all reviews for a product
 // @access  Public

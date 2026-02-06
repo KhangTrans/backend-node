@@ -92,9 +92,43 @@ const getReviewStats = async (productId) => {
   };
 };
 
+
+
+const getAllReviews = async ({ page = 1, limit = 20, rating, isReplied }) => {
+  const filter = {};
+  if (rating) filter.rating = parseInt(rating);
+  
+  // Check reply existence
+  if (isReplied === 'true') filter['reply.comment'] = { $exists: true, $ne: null };
+  if (isReplied === 'false') filter['reply.comment'] = { $exists: false };
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  
+  const [reviews, total] = await Promise.all([
+    reviewDao.findAll(filter, skip, parseInt(limit)),
+    reviewDao.count(filter)
+  ]);
+
+  return {
+    reviews,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit))
+    }
+  };
+};
+
+const deleteReview = async (reviewId) => {
+  return await reviewDao.deleteById(reviewId);
+};
+
 module.exports = {
   addReview,
   replyToReview,
   getReviewsByProduct,
-  getReviewStats
+  getReviewStats,
+  getAllReviews,
+  deleteReview
 };

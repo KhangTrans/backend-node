@@ -68,3 +68,30 @@ exports.replyToReview = async (req, res) => {
     res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 };
+
+exports.getAllReviews = async (req, res) => {
+  try {
+    const result = await reviewService.getAllReviews(req.query);
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error getting all reviews:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.deleteReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    await reviewService.deleteReview(reviewId);
+    res.json({
+      success: true,
+      message: 'Review deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting review:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
