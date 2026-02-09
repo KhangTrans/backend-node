@@ -12,9 +12,14 @@ const { generateUniqueSlug } = require('../utils/slug');
  * @param {Object} query - includeProducts, search
  * @returns {Promise<Array>} Categories
  */
-const getAllCategories = async ({ includeProducts, search }) => {
+const getAllCategories = async ({ includeProducts, search, isFeatured }) => {
   // Build filter
   const filter = { isActive: true };
+
+  // Filter by featured status
+  if (isFeatured === 'true') {
+    filter.isFeatured = true;
+  }
 
   // Search functionality
   if (search) {
@@ -26,8 +31,20 @@ const getAllCategories = async ({ includeProducts, search }) => {
 
   return await categoryDao.findAll(
     filter, 
-    { name: 1 }, 
+    { isFeatured: -1, name: 1 }, // Prioritize featured categories
     includeProducts === 'true'
+  );
+};
+
+/**
+ * Get featured categories
+ * @returns {Promise<Array>} Featured Categories
+ */
+const getFeaturedCategories = async () => {
+  return await categoryDao.findAll(
+    { isActive: true, isFeatured: true },
+    { updatedAt: -1 }, // Sort by recently updated
+    false // Don't populate products for summary view
   );
 };
 
@@ -51,10 +68,10 @@ const getCategoryBySlug = async (slug) => {
 
 /**
  * Create new category
- * @param {Object} data - name, slug, description, imageUrl
+ * @param {Object} data - name, slug, description, imageUrl, isFeatured
  * @returns {Promise<Object>} Created category
  */
-const createCategory = async ({ name, slug: customSlug, description, imageUrl }) => {
+const createCategory = async ({ name, slug: customSlug, description, imageUrl, isFeatured }) => {
   // Generate unique slug
   const slug = customSlug 
     ? await generateUniqueSlug(customSlug, null, Category)
@@ -64,17 +81,12 @@ const createCategory = async ({ name, slug: customSlug, description, imageUrl })
     name,
     slug,
     description,
-    imageUrl
+    imageUrl,
+    isFeatured: isFeatured || false
   });
 };
 
-/**
- * Update category
- * @param {String} id
- * @param {Object} data - name, slug, description, imageUrl, isActive
- * @returns {Promise<Object>} Updated category
- */
-const updateCategory = async (id, { name, slug: customSlug, description, imageUrl, isActive }) => {
+const updateCategory = async (id, { name, slug: customSlug, description, imageUrl, isActive, isFeatured }) => {
   const existingCategory = await categoryDao.findById(id, false);
 
   if (!existingCategory) {
@@ -97,6 +109,7 @@ const updateCategory = async (id, { name, slug: customSlug, description, imageUr
   if (description !== undefined) updateData.description = description;
   if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
   if (isActive !== undefined) updateData.isActive = isActive;
+  if (isFeatured !== undefined) updateData.isFeatured = isFeatured;
 
   return await categoryDao.updateById(id, updateData);
 };
@@ -122,6 +135,7 @@ const deleteCategory = async (id) => {
 
 module.exports = {
   getAllCategories,
+  getFeaturedCategories,
   getCategoryById,
   getCategoryBySlug,
   createCategory,

@@ -14,13 +14,14 @@ exports.createCategory = async (req, res) => {
       });
     }
 
-    const { name, slug, description, imageUrl } = req.body;
+    const { name, slug, description, imageUrl, isFeatured } = req.body;
 
     const category = await categoryService.createCategory({
       name,
       slug,
       description,
-      imageUrl
+      imageUrl,
+      isFeatured
     });
 
     res.status(201).json({
@@ -33,6 +34,28 @@ exports.createCategory = async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Error creating category',
+      error: error.message 
+    });
+  }
+};
+
+// @desc    Get featured categories
+// @route   GET /api/categories/featured
+// @access  Public
+exports.getFeaturedCategories = async (req, res) => {
+  try {
+    const categories = await categoryService.getFeaturedCategories();
+
+    res.status(200).json({
+      success: true,
+      count: categories.length,
+      data: categories
+    });
+  } catch (error) {
+    console.error('Get featured categories error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error getting featured categories',
       error: error.message 
     });
   }

@@ -27,6 +27,7 @@ const categoryValidation = [
 // Routes
 router.post('/', protect, authorize('admin'), invalidateCacheMiddleware('categories:*'), categoryValidation, categoryController.createCategory);
 router.get('/', cacheMiddleware('categories', 600), categoryController.getAllCategories);
+router.get('/featured', cacheMiddleware('categories-featured', 600), categoryController.getFeaturedCategories);
 router.get('/slug/:slug', cacheMiddleware('category-slug', 600), categoryController.getCategoryBySlug);
 router.get('/:id', cacheMiddleware('category', 600), categoryController.getCategory);
 router.put('/:id', protect, authorize('admin'), invalidateCacheMiddleware(['categories:*', 'category:*', 'category-slug:*']), categoryController.updateCategory);

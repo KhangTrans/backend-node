@@ -64,6 +64,38 @@ Backend đã hoàn thành **5 API gợi ý sản phẩm thông minh**. Đây là
 
 ---
 
+#### C. Section "Danh mục nổi bật" / "Featured Categories"
+
+**API:** `GET /api/categories/featured`
+
+**Vị trí:**
+
+- Ngay dưới Hero Banner (đầu tiên)
+- Dạng tròn (circle) hoặc card nhỏ
+
+**Lý do:**
+
+- Giúp user điều hướng nhanh
+- Highlight các nhóm hàng chủ lực
+
+**UI Suggestion:**
+
+```jsx
+<section className="featured-categories">
+  <h2>Danh mục nổi bật</h2>
+  <div className="category-list">
+    {categories.map((cat) => (
+      <Link to={`/category/${cat.slug}`} className="cat-item">
+        <img src={cat.imageUrl} alt={cat.name} />
+        <span>{cat.name}</span>
+      </Link>
+    ))}
+  </div>
+</section>
+```
+
+---
+
 ### 2. **PRODUCT DETAIL PAGE** 📦
 
 #### A. Section "Sản phẩm tương tự" / "Similar Products"

@@ -210,6 +210,44 @@ GET /api/recommendations/best-rated?limit=10
 
 ---
 
+### 6. **Featured Categories** - Danh mục nổi bật
+
+Lấy danh sách các danh mục được đánh dấu là nổi bật (featured).
+
+**Endpoint:**
+
+```
+GET /api/categories/featured
+```
+
+**Example Request:**
+
+```bash
+GET /api/categories/featured
+```
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "count": 3,
+  "data": [
+    {
+      "_id": "...",
+      "name": "Điện thoại",
+      "slug": "dien-thoai",
+      "description": "...",
+      "imageUrl": "...",
+      "isFeatured": true
+    },
+    ...
+  ]
+}
+```
+
+---
+
 ## 🎨 Use Cases cho Frontend
 
 ### 1. **Product Detail Page**

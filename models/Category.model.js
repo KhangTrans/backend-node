@@ -17,12 +17,18 @@ const categorySchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    trim: true
+    maxlength: [500, 'Description cannot exceed 500 characters']
   },
   imageUrl: {
-    type: String,
-    trim: true,
-    maxlength: 500
+    type: String
+  },
+  isFeatured: {
+    type: Boolean,
+    default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
   },
   isActive: {
     type: Boolean,
