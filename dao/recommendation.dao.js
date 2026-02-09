@@ -1,5 +1,6 @@
 const Product = require('../models/Product.model');
 const Order = require('../models/Order.model');
+const Category = require('../models/Category.model');
 
 /**
  * Recommendation DAO - Database Access Layer
@@ -32,7 +33,8 @@ const getSimilarProducts = async (productId, limit = 10) => {
     isActive: true,
     stock: { $gt: 0 } // In stock
   })
-    .select('name slug price stock images categoryId createdAt')
+    .populate('categoryId', 'name slug')
+    .select('name slug description price stock images categoryId createdAt')
     .sort({ createdAt: -1 }) // Prefer newer products
     .limit(limit);
 
@@ -73,7 +75,8 @@ const getTrendingProducts = async (limit = 10, days = 30) => {
   if (trendingProductIds.length === 0) {
     // Fallback: return newest products if no orders
     return await Product.find({ isActive: true, stock: { $gt: 0 } })
-      .select('name slug price stock images categoryId createdAt')
+      .populate('categoryId', 'name slug')
+      .select('name slug description price stock images categoryId createdAt')
       .sort({ createdAt: -1 })
       .limit(limit);
   }
@@ -84,7 +87,8 @@ const getTrendingProducts = async (limit = 10, days = 30) => {
     _id: { $in: productIds },
     isActive: true
   })
-    .select('name slug price stock images categoryId createdAt');
+    .populate('categoryId', 'name slug')
+    .select('name slug description price stock images categoryId createdAt');
 
   // Sort products by trending order
   const sortedProducts = productIds.map(id => 
@@ -109,7 +113,8 @@ const getNewArrivals = async (limit = 10, days = 30) => {
     stock: { $gt: 0 },
     createdAt: { $gte: dateThreshold }
   })
-    .select('name slug price stock images categoryId createdAt')
+    .populate('categoryId', 'name slug')
+    .select('name slug description price stock images categoryId createdAt')
     .sort({ createdAt: -1 })
     .limit(limit);
 
@@ -135,7 +140,8 @@ const getProductsByCategory = async (categoryId, excludeProductId = null, limit 
   }
 
   const products = await Product.find(query)
-    .select('name slug price stock images categoryId createdAt')
+    .populate('categoryId', 'name slug')
+    .select('name slug description price stock images categoryId createdAt')
     .sort({ createdAt: -1 })
     .limit(limit);
 
