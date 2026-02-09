@@ -61,13 +61,8 @@ const addBanner = async (bannerData) => {
     throw new Error('URL hình ảnh không được để trống');
   }
 
-  if (!bannerData.title || bannerData.title.trim().length === 0) {
-    throw new Error('Tiêu đề banner không được để trống');
-  }
-
   // Set default values
   const banner = {
-    title: bannerData.title,
     imageUrl: bannerData.imageUrl,
     link: bannerData.link || '',
     isActive: bannerData.isActive !== undefined ? bannerData.isActive : true,
@@ -87,10 +82,6 @@ const updateBanner = async (bannerId, bannerData) => {
   // Business logic: Validate banner data
   if (bannerData.imageUrl && bannerData.imageUrl.trim().length === 0) {
     throw new Error('URL hình ảnh không được để trống');
-  }
-
-  if (bannerData.title && bannerData.title.trim().length === 0) {
-    throw new Error('Tiêu đề banner không được để trống');
   }
 
   const result = await settingsDao.updateBanner(bannerId, bannerData);

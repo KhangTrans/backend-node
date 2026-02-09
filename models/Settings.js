@@ -23,7 +23,6 @@ const settingsSchema = new mongoose.Schema({
     banners: [{
       imageUrl: { type: String, required: true },
       publicId: { type: String },
-      title: { type: String, default: '' },
       link: { type: String, default: '' },
       order: { type: Number, default: 0 },
       isActive: { type: Boolean, default: true }

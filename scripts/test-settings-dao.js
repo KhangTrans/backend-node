@@ -38,7 +38,6 @@ const runTest = async () => {
     console.log('\n--- Testing addBanner ---');
     const newBanner = {
       imageUrl: 'http://example.com/banner.jpg',
-      title: 'Test Banner',
       order: 1
     };
     const addedBanners = await settingsDao.addBanner(newBanner);
@@ -48,11 +47,11 @@ const runTest = async () => {
     // 6. Update Banner
     console.log('\n--- Testing updateBanner ---');
     const bannerUpdate = {
-      title: 'Updated Banner Title'
+      link: 'http://example.com/updated-link'
     };
     const updatedBanners = await settingsDao.updateBanner(addedBannerId, bannerUpdate);
     const updatedBanner = updatedBanners.find(b => b._id.toString() === addedBannerId.toString());
-    console.log('Updated banner title:', updatedBanner.title);
+    console.log('Updated banner link:', updatedBanner.link);
 
     // 7. Delete Banner
     console.log('\n--- Testing deleteBanner ---');

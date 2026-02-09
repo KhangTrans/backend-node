@@ -72,7 +72,7 @@ const updateAppearance = async (req, res) => {
 // @access  Admin
 const addBanner = async (req, res) => {
   try {
-    const { imageUrl, publicId, title, link, order, isActive } = req.body;
+    const { imageUrl, publicId, link, order, isActive } = req.body;
     
     if (!imageUrl) {
       return res.status(400).json({ 
@@ -84,7 +84,6 @@ const addBanner = async (req, res) => {
     const bannerData = {
       imageUrl,
       publicId,
-      title: title || '',
       link: link || '',
       order: order !== undefined ? order : 0,
       isActive: isActive !== undefined ? isActive : true
