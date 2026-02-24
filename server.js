@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const passport = require('passport');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 const { connectMongoDB } = require('./config/mongodb');
 const { connectRedis, disconnectRedis } = require('./config/redis');
@@ -26,8 +27,23 @@ const corsOptions = {
   maxAge: 86400 // 24 hours
 };
 
+// Global Rate Limiting - 100 requests per 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => req.path === '/health', // Skip rate limiting for health check
+  message: {
+    success: false,
+    message: 'Quá nhiều yêu cầu từ IP này, vui lòng thử lại sau 15 phút.',
+    retryAfter: '15 minutes'
+  }
+});
+
 // Middleware
 app.use(cors(corsOptions));
+app.use(globalLimiter); // Apply rate limiting globally
 app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -50,6 +66,7 @@ app.use('/api/chatbot', require('./routes/chatbot.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
 app.use('/api/reviews', require('./routes/review.routes'));
 app.use('/api/recommendations', require('./routes/recommendation.routes'));
+app.use('/api/product-banners', require('./routes/productBanner.routes'));
 
 // Payment routes - Load on all environments
 app.use('/api/payment', require('./routes/payment.routes'));
