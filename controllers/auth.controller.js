@@ -246,3 +246,76 @@ exports.verifyEmail = async (req, res) => {
   }
 };
 
+// @desc    Forgot password - Send OTP to email
+// @route   POST /api/auth/forgot-password
+// @access  Public
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email là bắt buộc'
+      });
+    }
+
+    const result = await authService.forgotPassword(email);
+
+    res.status(200).json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Có lỗi xảy ra khi gửi mã OTP',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Reset password with OTP
+// @route   POST /api/auth/reset-password
+// @access  Public
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    // Validation
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, mã OTP và mật khẩu mới là bắt buộc'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu mới phải có ít nhất 6 ký tự'
+      });
+    }
+
+    const result = await authService.resetPasswordWithOTP(email, otp, newPassword);
+
+    res.status(200).json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    const status = error.message.includes('không tồn tại') || 
+                   error.message.includes('không hợp lệ') || 
+                   error.message.includes('hết hạn') ||
+                   error.message.includes('không chính xác') ? 400 : 500;
+    
+    res.status(status).json({
+      success: false,
+      message: error.message || 'Có lỗi xảy ra khi đặt lại mật khẩu',
+      error: error.message
+    });
+  }
+};
+

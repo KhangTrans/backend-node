@@ -67,6 +67,24 @@ router.get('/users', authController.getAllUsers);
 // @access  Public
 router.post('/verify-email', authController.verifyEmail);
 
+// @route   POST /api/auth/forgot-password
+// @desc    Send OTP to email for password reset
+// @access  Public
+router.post('/forgot-password', 
+  body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
+  authController.forgotPassword
+);
+
+// @route   POST /api/auth/reset-password
+// @desc    Reset password with OTP
+// @access  Public
+router.post('/reset-password',
+  body('email').trim().isEmail().withMessage('Email không hợp lệ').normalizeEmail(),
+  body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('Mã OTP phải có 6 chữ số'),
+  body('newPassword').isLength({ min: 6 }).withMessage('Mật khẩu mới phải có ít nhất 6 ký tự'),
+  authController.resetPassword
+);
+
 // ==================== Google OAuth Routes ====================
 
 // @route   GET /api/auth/google

@@ -65,6 +65,12 @@ const userSchema = new mongoose.Schema({
   emailVerificationExpires: {
     type: Date
   },
+  resetPasswordOTP: {
+    type: String
+  },
+  resetPasswordOTPExpires: {
+    type: Date
+  },
   savedVouchers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Voucher'

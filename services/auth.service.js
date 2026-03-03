@@ -213,11 +213,102 @@ const verifyEmail = async (token) => {
   return { user: updatedUser, token: jwtToken };
 };
 
+/**
+ * Forgot password - Generate and send OTP
+ * @param {string} email
+ * @returns {Object} { message }
+ */
+const forgotPassword = async (email) => {
+  // Find user by email
+  const user = await userDao.findByEmail(email);
+
+  if (!user) {
+    // Don't reveal if email exists or not for security
+    return { message: 'Nếu email tồn tại, mã OTP đã được gửi đến email của bạn.' };
+  }
+
+  // Check if user is active
+  if (!user.isActive) {
+    throw new Error('Tài khoản đã bị vô hiệu hóa');
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  // Save OTP to database
+  await userDao.updateById(user._id, {
+    resetPasswordOTP: otp,
+    resetPasswordOTPExpires: otpExpires
+  });
+
+  // Send OTP via email
+  try {
+    await emailService.sendResetPasswordOTP(email, otp);
+  } catch (error) {
+    console.error('Failed to send OTP email:', error);
+    // Clear OTP from database if email sending fails
+    await userDao.updateById(user._id, {
+      resetPasswordOTP: null,
+      resetPasswordOTPExpires: null
+    });
+    throw new Error('Gửi mã OTP thất bại. Vui lòng thử lại sau.');
+  }
+
+  return { message: 'Mã OTP đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư.' };
+};
+
+/**
+ * Verify OTP and reset password
+ * @param {string} email
+ * @param {string} otp
+ * @param {string} newPassword
+ * @returns {Object} { message }
+ */
+const resetPasswordWithOTP = async (email, otp, newPassword) => {
+  // Find user by email
+  const user = await userDao.findByEmail(email);
+
+  if (!user) {
+    throw new Error('Email không tồn tại');
+  }
+
+  // Check if OTP exists and is not expired
+  if (!user.resetPasswordOTP || !user.resetPasswordOTPExpires) {
+    throw new Error('Mã OTP không hợp lệ hoặc đã hết hạn');
+  }
+
+  if (Date.now() > user.resetPasswordOTPExpires) {
+    // Clear expired OTP
+    await userDao.updateById(user._id, {
+      resetPasswordOTP: null,
+      resetPasswordOTPExpires: null
+    });
+    throw new Error('Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.');
+  }
+
+  // Verify OTP
+  if (user.resetPasswordOTP !== otp) {
+    throw new Error('Mã OTP không chính xác');
+  }
+
+  // Update password and clear OTP
+  // Password will be hashed by User model pre-save hook
+  user.password = newPassword;
+  user.resetPasswordOTP = null;
+  user.resetPasswordOTPExpires = null;
+  await user.save();
+
+  return { message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.' };
+};
+
 module.exports = {
   register,
   login,
   getCurrentUser,
   googleLogin,
   generateUserToken,
-  verifyEmail
+  verifyEmail,
+  forgotPassword,
+  resetPasswordWithOTP
 };
